@@ -1,0 +1,297 @@
+= What is it
+
+The <tt>maven-dependency-versions-check-plugin</tt> is a Maven plugin that verifies that the resolved versions of dependencies are at least the versions
+specified by the dependencies (or their dependencies etc.) if not higher. More specifically, it will check that
+* The resolved version of every dependency declared explicitly in the current POM is the same or a newer one than what was stated. If the resolved version has a higher major version number than the declared version, then the plugin will issue a warning if configured to do so. Note that enforced declared versions are ignored by the plugin.
+* For every explicitly declared dependency in the current POM, all its dependency versions are met. I.e. the resolved versions for all dependencies in that dependency's POM are the same or higher than the one stated in that dependency's POM. This is basically the same check as the one above, but using the dependency's POM. Also, if the current POM has exclusions specified for the dependency, then these transitive dependencies are ignored when checking this particular dependency.
+
+= How to get it
+
+Currently, the plugin is not in a public repository yet, so you'll have to build it yourself. First clone the git repository and then simply do
+
+    mvn install
+
+This will install the plugin into your local repository and make it available for use. To make commandline usage a bit easier, you should add the
+<tt>com.ning.maven.plugins</tt> group to the <tt>pluginGroups</tt> section in your settings file:
+
+    <settings>
+      ...
+      <pluginGroups>
+        <pluginGroup>com.ning.maven.plugins</pluginGroup>
+      </pluginGroups>
+      ...
+    </settings>
+
+= How to use it
+
+== Running it
+
+Usually, the plugin does not need to be configured in the POM. You can simply execute it via maven command line in a directory that contains a POM
+(which can be a multi-module POM):
+
+    mvn dependency-versions-check:check
+
+This will check for the latest version of the plugin, download it if necessary, and then execute it. Note that you might get snapshot versions this way.
+You can also run a specific version using the fully qualified plugin identifier:
+
+    mvn com.ning.maven.plugins:maven-dependency-versions-check-plugin:1.0.0:check
+
+If you want to include it in the normal build, configure it like this:
+
+    <plugin>
+      <groupId>com.ning.maven.plugins</groupId>
+      <artifactId>maven-dependency-versions-check-plugin</artifactId>
+      <executions>
+        <execution>
+          <phase>verify</phase>
+          <goals>
+            <goal>check</goal>
+          </goals>
+        </execution>
+      </executions>
+    </plugin>
+
+If the plugin finds a conflict, then it will output something like
+
+    [INFO] Checking dependency versions
+    [WARNING] Found a problem with the direct dependency log4j:log4j of the current project
+      Expected version is 1.2.13
+      Resolved version is 1.2.13
+      A newer version 1.2.16 was expected by artifact: org.jboss.netty:netty
+
+The above sample shows a conflict with a dependency declared in the current POM. In this case, it will print
+* the expected version of the current POM
+* the resolved version (i.e. effective POM)
+* all versions that were encountered during dependency resolution plus the dependencies that brought them in
+
+If the problem is instead between dependencies, then it will omit the expected version.
+
+The above will change to <tt>[ERROR]</tt> if the plugin is configured to fail the build in case of conflicts (see below).
+
+== Configuring it
+
+In rare cases you need to configure the plugin to make exceptions, i.e. allow specific version conflicts. For instance, in the above example
+you might insist that <tt>log4j</tt> version 1.2.13 is fine:  
+
+    <plugin>
+      <groupId>com.ning.maven.plugins</groupId>
+      <artifactId>maven-dependency-versions-check-plugin</artifactId>
+      <configuration>
+        <failBuildInCaseOfConflict>true</failBuildInCaseOfConflict>
+        <exceptions>
+          <exception>
+            <groupId>log4j</groupId>
+            <artifactId>log4j</artifactId>
+            <expectedVersion>1.2.13</expectedVersion>
+            <resolvedVersion>1.2.16</resolvedVersion>
+          </exception>
+        </exceptions>
+      </configuration>
+    </plugin>
+
+An exception is only for a specific version conflict, in this case 1.2.13 instead of 1.2.16. If the plugin finds that a different version of <tt>log4j</tt>
+was resolved or required, say 1.2.15, then you will get additional warnings/errors that would have to be handled with additional exceptions.
+
+Note also that this configuration overrides the default configuration (e.g. from the parent POM), so you should duplicate that configuration.
+
+= How to resolve conflicts
+
+Some more detailed explanation is below in the background section.
+
+In general, you should try to upgrade dependency versions if you can make sure that they work (e.g. via unit or other tests).
+If you cannot do that, then either add exclusions or add an explicit dependency in the current POM.
+If even this fails, then add an exception configuration, but please use this only as a last resort.
+In this case you should add comments to the exceptions, exclusions or explicit dependencies that state why you added them (e.g. noting the version conflict).
+
+== Background: Maven 2's arbitrary version resolution strategy
+
+Consider four projects, A through D. A depends on B and C which both depend on D, but on different versions. E.g. B's and C's POM look like this:
+
+    <project>
+      <groupId>...</groupId>
+      <artifactId>B</artifactId>
+      ...
+      <dependencies>
+        <dependency>
+          <groupId>...</groupId>
+          <artifactId>D</artifactId>
+          <version>1.0</version>
+        </dependency>
+      </dependencies>
+    </project>
+
+    <project>
+      <groupId>...</groupId>
+      <artifactId>C</artifactId>
+      ...
+      <dependencies>
+        <dependency>
+          <groupId>...</groupId>
+          <artifactId>D</artifactId>
+          <version>1.1</version>
+        </dependency>
+      </dependencies>
+    </project>
+
+If A's POM looks like this:
+
+    <project>
+      <groupId>...</groupId>
+      <artifactId>A</artifactId>
+      ...
+      <dependencies>
+        <dependency>
+          <groupId>...</groupId>
+          <artifactId>B</artifactId>
+          <version>...</version>
+        </dependency>
+        <dependency>
+          <groupId>...</groupId>
+          <artifactId>C</artifactId>
+          <version>...</version>
+        </dependency>
+      </dependencies>
+    </project>
+
+Maven will resolve D's version to 1.0 because it will use the first version it encounters. This is obviously a problem since C needs at least version 1.1.
+If we change A's POM to 
+
+    <project>
+      <groupId>...</groupId>
+      <artifactId>A</artifactId>
+      ...
+      <dependencies>
+        <dependency>
+          <groupId>...</groupId>
+          <artifactId>C</artifactId>
+          <version>...</version>
+        </dependency>
+        <dependency>
+          <groupId>...</groupId>
+          <artifactId>B</artifactId>
+          <version>...</version>
+        </dependency>
+      </dependencies>
+    </project>
+
+then we'll get version 1.1.
+However this is not a solution - imagine if B updates to version 1.2 of D ...
+
+The common strategies to handle this are:
+
+=== Specify an explicit dependency in A
+
+    <project>
+      <groupId>...</groupId>
+      <artifactId>A</artifactId>
+      ...
+      <dependencies>
+        <dependency>
+          <groupId>...</groupId>
+          <artifactId>B</artifactId>
+          <version>...</version>
+        </dependency>
+        <dependency>
+          <groupId>...</groupId>
+          <artifactId>C</artifactId>
+          <version>...</version>
+        </dependency>
+        <dependency>
+          <groupId>...</groupId>
+          <artifactId>D</artifactId>
+          <version>1.1</version>
+        </dependency>
+      </dependencies>
+    </project>
+
+In this case, Maven uses the version that is specified in A's POM and ignores both B and C. Still won't help in the case that B or C update to a newer version, though.
+
+=== Use dependency management in the parent POM
+
+If B, and C use a common parent POM, then the version of D can be specified in that parent POM:
+
+    <project>
+      <groupId>...</groupId>
+      <artifactId>ParentOfBAndC</artifactId>
+      ...
+      <dependencyManagement>
+        <dependencies>
+          <dependency>
+            <groupId>...</groupId>
+            <artifactId>D</artifactId>
+            <version>1.1</version>
+          </dependency>
+        </dependencies>
+      </dependencyManagement>
+    </project>
+
+This does not declare a dependency of ParentOfBAndC to D, but instead defines the version for all POMs that have this POM as a parent (unless a version is stated in that POM).
+B and C then can be changed to this:
+
+    <project>
+      <parent>
+        <groupId>...</groupId>
+        <artifactId>ParentOfBAndC</artifactId>
+      </parent>
+      <groupId>...</groupId>
+      <artifactId>B</artifactId>
+      ...
+      <dependencies>
+        <dependency>
+          <groupId>...</groupId>
+          <artifactId>D</artifactId>
+        </dependency>
+      </dependencies>
+    </project>
+
+    <project>
+      <parent>
+        <groupId>...</groupId>
+        <artifactId>ParentOfBAndC</artifactId>
+      </parent>
+      <groupId>...</groupId>
+      <artifactId>C</artifactId>
+      ...
+      <dependencies>
+        <dependency>
+          <groupId>...</groupId>
+          <artifactId>D</artifactId>
+        </dependency>
+      </dependencies>
+    </project>
+
+This way, B and C will get the same version. However if the version of D changes, both B and C will have to be released and A has to be updated to use both new
+versions, or we have the same problem again.
+
+=== Use exclusions
+
+In some cases, we specifically don't want a transitive dependency. For instance, if in the above scenario we want to avoid version 1.1 in A, we could add an exclusion:
+
+    <project>
+      <groupId>...</groupId>
+      <artifactId>A</artifactId>
+      ...
+      <dependencies>
+        <dependency>
+          <groupId>...</groupId>
+          <artifactId>B</artifactId>
+          <version>...</version>
+        </dependency>
+        <dependency>
+          <groupId>...</groupId>
+          <artifactId>C</artifactId>
+          <version>...</version>
+          <exclusions>
+            <exclusion>
+              <groupId>...</groupId>
+              <artifactId>D</artifactId>
+            </exclusion>
+          </exclusions>
+        </dependency>
+      </dependencies>
+    </project>
+
+This will have the effect of excluding the version of D that C brings to the party, so in our example it has the same effect as adding an explicit dependency to A.
+
+There are additional, subtle interactions when enforced versions come into play (e.g. <tt>[1.0]</tt> in B's POM). You should generally avoid enforcing
+versions this way.
