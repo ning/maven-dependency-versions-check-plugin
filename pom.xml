@@ -5,7 +5,36 @@
   <packaging>maven-plugin</packaging>
   <version>1.0.0-SNAPSHOT</version>
   <name>maven-version-check-plugin Maven Mojo</name>
+  <description>
+      The maven-dependency-versions-check-plugin is a Maven plugin
+      that verifies that the resolved versions of dependencies are at
+      least the versions specified by the dependencies (or their
+      dependencies etc.) if not higher. 
+
+      More specifically, it will check that 
+         * The resolved version of every dependency declared explicitly 
+           in the current POM is the same or a newer one than what was 
+           stated. If the resolved version has a higher major version 
+           number than the declared version, then the plugin will issue
+           a warning if configured to do so. 
+           Note that enforced declared versions are ignored by the plugin.  
+         * For every explicitly declared dependency in the current POM, all
+           its dependency versions are met. I.e. the resolved versions for 
+           all dependencies in that dependency's POM are the same or higher
+           than the one stated in that dependency's POM. This is basically 
+           the same check as the one above, but using the dependency's POM. 
+         Also, if the current POM has exclusions specified for the
+         dependency, then these transitive dependencies are ignored
+         when checking this particular dependency.
+  </description>
   <url>http://www.ning.com</url>
+  <licenses>
+      <license>
+          <name>Apache License 2.0</name>
+          <url>http://www.apache.org/licenses/LICENSE-2.0.html</url>
+          <distribution>repo</distribution>
+      </license>
+  </licenses>
   <scm>
     <connection>scm:git:git://github.com/ning/maven-dependency-versions-check-plugin.git</connection>
     <developerConnection>scm:git:git://github.com/ning/maven-dependency-versions-check-plugin.git</developerConnection>
@@ -14,6 +43,18 @@
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
   </properties>
+  <distributionManagement>
+      <snapshotRepository>
+          <id>sonatype-nexus-snapshots</id>
+          <name>Sonatype Nexus Snapshots</name>
+          <url>http://oss.sonatype.org/content/repositories/snapshots</url>
+      </snapshotRepository>
+      <repository>
+          <id>sonatype-nexus-staging</id>
+          <name>Nexus Release Repository</name>
+          <url>http://oss.sonatype.org/service/local/staging/deploy/maven2/</url>
+      </repository>
+  </distributionManagement>
   <dependencies>
     <dependency>
       <groupId>org.apache.maven</groupId>
