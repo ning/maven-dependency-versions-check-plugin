@@ -19,7 +19,9 @@ package com.ning.maven.plugins.dependencyversionscheck;
 import org.apache.commons.lang.StringUtils;
 import org.apache.maven.artifact.Artifact;
 
-public class Exception
+import com.ning.maven.plugins.dependencyversionscheck.version.Version;
+
+public class VersionCheckExcludes
 {
     private String groupId;
     private String artifactId;
@@ -52,7 +54,7 @@ public class Exception
     {
         this.expectedVersion = new Version(versionStr);
     }
-    
+
     public void setResolvedVersion(String versionStr)
     {
         this.resolvedVersion = new Version(versionStr);
@@ -79,9 +81,9 @@ public class Exception
             builder.append(classifier);
         }
         builder.append(" ");
-        builder.append(expectedVersion.getRawVersionString());
+        builder.append(expectedVersion.getSelectedVersion());
         builder.append(" vs. ");
-        builder.append(resolvedVersion.getRawVersionString());
+        builder.append(resolvedVersion.getSelectedVersion());
         return builder.toString();
     }
 

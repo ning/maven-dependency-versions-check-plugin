@@ -1,9 +1,15 @@
 = What is it
 
-The <tt>maven-dependency-versions-check-plugin</tt> is a Maven plugin that verifies that the resolved versions of dependencies are at least the versions
-specified by the dependencies (or their dependencies etc.) if not higher. More specifically, it will check that
-* The resolved version of every dependency declared explicitly in the current POM is the same or a newer one than what was stated. If the resolved version has a higher major version number than the declared version, then the plugin will issue a warning if configured to do so. Note that enforced declared versions are ignored by the plugin.
-* For every explicitly declared dependency in the current POM, all its dependency versions are met. I.e. the resolved versions for all dependencies in that dependency's POM are the same or higher than the one stated in that dependency's POM. This is basically the same check as the one above, but using the dependency's POM. Also, if the current POM has exclusions specified for the dependency, then these transitive dependencies are ignored when checking this particular dependency.
+The <tt>maven-dependency-versions-check-plugin</tt> is a Maven plugin that verifies that the resolved versions of dependencies are mutually compatible
+with each other. While Maven does a good job in dependency resolution, it usually applied the "higher version wins" algorithm to select a dependency and
+is not aware of any semantic notions of version number (e.g. that artifacts with different major version numbers are not comaptible. 
+
+More specifically, it will check that
+
+* The resolved version of every dependency declared explicitly in the current POM is the same or at least compatible with the one that was stated.
+* For every explicitly declared dependency in the current POM, all its dependency versions are met. I.e. the resolved versions for all dependencies are compatible to the version stated in that dependency's POM.
+
+The plugin can configured to issue warnings or fail the build in that case.
 
 = How to get it
 
@@ -24,19 +30,66 @@ This will install the plugin into your local repository and make it available fo
 
 = How to use it
 
-== Running it
+The plugin as two goals:
 
-Usually, the plugin does not need to be configured in the POM. You can simply execute it via maven command line in a directory that contains a POM
-(which can be a multi-module POM):
+* com.ning.maven.plugins:maven-dependency-versions-check-plugin:list lists out all dependencies in the project
+* com.ning.maven.plugins:maven-dependency-versions-check-plugin:check checks all the dependencies in the project and can fail the build.
 
-    mvn dependency-versions-check:check
+== The "list" goal
 
-This will check for the latest version of the plugin, download it if necessary, and then execute it. Note that you might get snapshot versions this way.
-You can also run a specific version using the fully qualified plugin identifier:
+This goal reports a list of all dependencies that are used in the current project:
 
-    mvn com.ning.maven.plugins:maven-dependency-versions-check-plugin:1.0.0:check
+    % mvn com.ning.maven.plugins:maven-dependency-versions-check-plugin:list
 
-If you want to include it in the normal build, configure it like this:
+    [...]
+    [INFO] [dependency-versions-check:list {execution: default-cli}]
+    [INFO] Transitive dependencies for scope 'compile':
+    [INFO] backport-util-concurrent:backport-util-concurrent: backport-util-concurrent:backport-util-concurrent-3.1 (3.1)
+    [INFO] classworlds:classworlds:                           classworlds:classworlds-1.1-alpha-2 (1.1-alpha-2)
+    [INFO] com.pyx4j:maven-plugin-log4j:                      com.pyx4j:maven-plugin-log4j-1.0.1 (*1.0.1*)
+    [INFO] commons-collections:commons-collections:           commons-collections:commons-collections-3.2.1 (*3.2.1*)
+    [INFO] commons-lang:commons-lang:                         commons-lang:commons-lang-2.5 (*2.5*)
+    [INFO] junit:junit:                                       junit:junit-3.8.1 (3.8.1)
+    [INFO] log4j:log4j:                                       log4j:log4j-1.2.16 (1.2.14, *1.2.16*)
+    [INFO] org.apache.maven.wagon:wagon-provider-api:         org.apache.maven.wagon:wagon-provider-api-1.0-beta-6 (1.0-beta-6)
+    [INFO] org.apache.maven:maven-artifact:                   org.apache.maven:maven-artifact-2.2.1 (2.0, 2.2.1)
+    [INFO] org.apache.maven:maven-artifact-manager:           org.apache.maven:maven-artifact-manager-2.2.1 (2.2.1)
+    [INFO] org.apache.maven:maven-model:                      org.apache.maven:maven-model-2.2.1 (2.2.1)
+    [INFO] org.apache.maven:maven-plugin-api:                 org.apache.maven:maven-plugin-api-2.2.1 (2.0, *2.2.1*)
+    [INFO] org.apache.maven:maven-plugin-registry:            org.apache.maven:maven-plugin-registry-2.2.1 (2.2.1)
+    [INFO] org.apache.maven:maven-profile:                    org.apache.maven:maven-profile-2.2.1 (2.2.1)
+    [INFO] org.apache.maven:maven-project:                    org.apache.maven:maven-project-2.2.1 (*2.2.1*)
+    [INFO] org.apache.maven:maven-repository-metadata:        org.apache.maven:maven-repository-metadata-2.2.1 (2.2.1)
+    [INFO] org.apache.maven:maven-settings:                   org.apache.maven:maven-settings-2.2.1 (2.2.1)
+    [INFO] org.codehaus.plexus:plexus-container-default:      org.codehaus.plexus:plexus-container-default-1.0-alpha-9-stable-1 (1.0-alpha-9-stable-1)
+    [INFO] org.codehaus.plexus:plexus-interpolation:          org.codehaus.plexus:plexus-interpolation-1.11 (1.11)
+    [INFO] org.codehaus.plexus:plexus-utils:                  org.codehaus.plexus:plexus-utils-1.5.15 (1.0.4, 1.5.15)
+    [INFO] org.slf4j:slf4j-api:                               org.slf4j:slf4j-api-1.6.1 (*1.6.1*)
+    [INFO] org.slf4j:slf4j-log4j12:                           org.slf4j:slf4j-log4j12-1.6.1 (*1.6.1*)
+    [...]
+
+This is the dependency list for the plugin itself. Every line contains of the following elements:
+
+* actual dependency - The dependency that was resolved based on the project POM.
+* resolved dependency - The dependency that was chosen to be included.
+* additional versions - In braces, one or more dependency versions. These are the versions that were under consideration when choosing the final dependency. 
+
+If a dependency is surrounded by "*", it was declared in the project POM.
+If a dependency is surrounded by "!", then it is in conflict. Running the check plugin will flag this as error and might fail the build.
+
+=== Options for the "list" goal
+
+These options are intended to be given on the command line. They can also be configured in the config section (see below) but are less useful.
+
+* scope - selects the scope for the dependency list. Can be "compile" (the default), "test" or "runtime".
+* directOnly (boolean) - if present, only list dependencies that are declared in the project POM. Transitive versions are still resolved and additional versions might be listed.
+* conflictsOnly (boolean) - list only dependencies that are in conflict.
+
+== The "check" goal
+
+This goal checks all the dependencies, reports only problems and might fail the build if configured.
+
+It is intended to be run as part of the normal build cycle. In this case, it should be added like this:
 
     <plugin>
       <groupId>com.ning.maven.plugins</groupId>
@@ -57,18 +110,23 @@ If the plugin finds a conflict, then it will output something like
     [WARNING] Found a problem with the direct dependency log4j:log4j of the current project
       Expected version is 1.2.13
       Resolved version is 1.2.13
-      A newer version 1.2.16 was expected by artifact: org.jboss.netty:netty
+      Version 1.2.16 was expected by artifact: org.jboss.netty:netty
 
 The above sample shows a conflict with a dependency declared in the current POM. In this case, it will print
 * the expected version of the current POM
 * the resolved version (i.e. effective POM)
-* all versions that were encountered during dependency resolution plus the dependencies that brought them in
+* all versions that were encountered during dependency resolution plus the dependencies that brought them in.
 
 If the problem is instead between dependencies, then it will omit the expected version.
 
 The above will change to <tt>[ERROR]</tt> if the plugin is configured to fail the build in case of conflicts (see below).
 
-== Configuring it
+= POM configuration section
+
+Note also that any configuration in a POM overrides the default configuration (e.g. from the parent POM), so you should duplicate that configuration or use the very 
+arcane 'combine.children' trick (see http://www.sonatype.com/people/2007/06/how-to-merge-sub-items-from-parent-pom-to-child-pom-in-a-maven-plugin-configuration-2/ for details...).
+
+== exceptions
 
 In rare cases you need to configure the plugin to make exceptions, i.e. allow specific version conflicts. For instance, in the above example
 you might insist that <tt>log4j</tt> version 1.2.13 is fine:  
@@ -77,7 +135,6 @@ you might insist that <tt>log4j</tt> version 1.2.13 is fine:
       <groupId>com.ning.maven.plugins</groupId>
       <artifactId>maven-dependency-versions-check-plugin</artifactId>
       <configuration>
-        <failBuildInCaseOfConflict>true</failBuildInCaseOfConflict>
         <exceptions>
           <exception>
             <groupId>log4j</groupId>
@@ -89,10 +146,134 @@ you might insist that <tt>log4j</tt> version 1.2.13 is fine:
       </configuration>
     </plugin>
 
+
 An exception is only for a specific version conflict, in this case 1.2.13 instead of 1.2.16. If the plugin finds that a different version of <tt>log4j</tt>
 was resolved or required, say 1.2.15, then you will get additional warnings/errors that would have to be handled with additional exceptions.
 
-Note also that this configuration overrides the default configuration (e.g. from the parent POM), so you should duplicate that configuration.
+An exception must have all four elements (groupId, artifactId, expectedVersion and resolvedVersion) present.
+
+== warnIfMajorVersionIsHigher
+
+Boolean flag that enables warnings if a dependency that was excluded from version resolution depends on an incompatible version 
+(for historical reasons it is called 'warnIfMajorVersionIsHigher'). Default value is "false" (do not warn).
+
+      <configuration>
+        <warnIfMajorVersionIsHigher>true</warnIfMajorVersionIsHigher>
+      </configuration>
+
+== failBuildInCaseOfConflict (check only)
+
+Boolean flag that will turn warnings about dependency problems into error messages and fail the build accordingly. Default value is "false" (only report warnings).
+    
+      <configuration>
+        <failBuildInCaseOfConflict>true</failBuildInCaseOfConflict>
+      </configuration>
+
+== resolvers
+
+Defines a version strategy resolver. Version strategy resolvers are used to determine which strategy to apply to decide whether two versions are compatible with each other.
+
+      <configuration>
+        <resolvers>
+          <resolver>
+            <id>apache-dependencies</id>
+            <strategy>apr</strategy>
+            <includes>
+              <include>commons-configuration:commons-configuration</include>
+              <include>org.apache.commons:*</include>
+              <include>org.apache.maven.plugins.*</include>
+              <include>org.apache*</include>
+            </includes>
+          </resolver>
+        </resolvers>
+      </configuration>
+
+A resolver contains a strategy name (<strategy>) and a list of one or more includes to list the patterns of artifacts for which this resolvers should be used. Patterns can contain
+wildcards (*) for both group and artifactName.
+
+See below for more details on strategy resolvers.
+
+== defaultStrategy
+
+Selects the default strategy to fall back on when no match is found in the resolvers configuration. Defaults to "default".
+
+See below for more details on strategies.
+
+= Version resolving strategies
+
+While maven uses a "highest version wins" approach to resolving dependencies (see below for more details), this is not always the best way to go. Often, version
+numbers also carry semantic meaning (e.g. Apache APR versioning assigns indicators for forward- and backward-compatibility on each of the elements in a three-digit
+version number). This plugin provides an indicator whether a set of dependencies resolved by maven actually "fits" and may fail at build time, thus avoiding failing
+at run time.
+
+To do so, it employs version resolving strategies. In the most simple use case, it uses the default strategy exclusively. But by using the <resolvers> section, it is
+possible to tweak this and to allow custom strategies to be used.
+
+== Strategies included with the plugin
+
+==== default - the default strategy
+
+This strategy is modelled after the actual maven version resolution.
+
+It assumes that all smaller versions are compatible when replaced with
+larger numbers and compares version elements from left to right. E.g.
+3.2.1 > 3.2 and 2.1.1 > 1.0. It usually works pretty ok and is the
+fallback for version resolution (unless changed with the
+<defaultStrategy> setting in the configuration section.
+
+==== apr - Apache APR versioning
+
+Three digit versioning, assumes that for two versions to be
+compatible, the first digit must be identical, the middle digit
+indicates backwards compatibility (i.e. 1.2.x can replace 1.1.x but
+1.4.x can not replace 1.5.x) and the third digit signifies the patch
+level (only bug fixes, full API compatibility).
+
+==== two-digits-backward-compatible - Relaxed APR versioning
+
+Similar to APR, but assumes that there is no "major" version digit
+(e.g. it is part of the artifact Id). All versions are backwards
+compatible. First digit must be the same or higher to be compatible
+(i.e. 2.0 can replace 1.2).
+
+==== single-digit - Single version number
+
+The version consists of a single number. Larger versions can replace
+smaller versions. The version number may contain additional letters or
+prefixes (i.e. r08 can replace r07).
+
+== Writing your own strategies (advanced usage)
+
+A custom strategy must implement the
+com.ning.maven.plugins.dependencyversionscheck.strategy.Strategy
+interface and must declare itself as a plexus component. A jar
+containing a custom strategy can then used as a custom dependency of
+the plugin:
+
+    /**
+     * @plexus.component role="com.ning.maven.plugins.dependencyversionscheck.strategy.Strategy" role-hint="bad"
+     */
+    public class BadStrategy implements Strategy
+    {
+        public String getName() { return "bad"; }
+
+        public boolean isCompatible(Version a, Version b) { return false; };
+    }
+
+    <plugin>
+      <groupId>com.ning.maven.plugins</groupId>
+      <artifactId>maven-dependency-versions-check-plugin</artifactId>
+      <dependencies>
+        <dependency>
+          <groupId>badExample</groupId>
+          <artifactId>badStrategy</artifactId>
+          <version>1.0</version>
+        </dependency>
+      </dependencies>
+    .....
+    </plugin>
+
+See the source code to the plugin and the existing strategies for examples on how to write strategies.
 
 = How to resolve conflicts
 
@@ -295,3 +476,4 @@ This will have the effect of excluding the version of D that C brings to the par
 
 There are additional, subtle interactions when enforced versions come into play (e.g. <tt>[1.0]</tt> in B's POM). You should generally avoid enforcing
 versions this way.
+
