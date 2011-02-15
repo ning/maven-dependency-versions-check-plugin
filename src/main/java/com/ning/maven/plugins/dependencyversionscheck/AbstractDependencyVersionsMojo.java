@@ -36,6 +36,7 @@ import org.apache.maven.artifact.factory.ArtifactFactory;
 import org.apache.maven.artifact.metadata.ArtifactMetadataSource;
 import org.apache.maven.artifact.repository.ArtifactRepository;
 import org.apache.maven.artifact.resolver.AbstractArtifactResolutionException;
+import org.apache.maven.artifact.resolver.ArtifactCollector;
 import org.apache.maven.artifact.resolver.ArtifactNotFoundException;
 import org.apache.maven.artifact.resolver.ArtifactResolutionException;
 import org.apache.maven.artifact.resolver.ArtifactResolutionResult;
@@ -59,6 +60,8 @@ import org.apache.maven.project.MavenProjectBuilder;
 import org.apache.maven.project.ProjectBuildingException;
 import org.apache.maven.project.artifact.InvalidDependencyVersionException;
 import org.apache.maven.project.artifact.MavenMetadataSource;
+import org.apache.maven.shared.dependency.tree.DependencyNode;
+import org.apache.maven.shared.dependency.tree.DependencyTreeBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -122,6 +125,20 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
      * @readonly
      */
     protected ArtifactRepository localRepository;
+
+    /**
+     * @component
+     * @required
+     * @readonly
+     */
+    protected DependencyTreeBuilder treeBuilder;
+
+    /**
+     * @component
+     * @required
+     * @readonly
+     */
+    protected ArtifactCollector artifactCollector;
 
     /**
      * Remote repositories.
@@ -203,7 +220,7 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
     /** Artifact pattern to VersionStrategy. Filled in loadResolvers(). */
     protected final Map resolverPatternMap = new HashMap();
 
-    /** Qualified artifact name to artifact. Filled in resolveDependencies(). */
+    /** Qualified artifact name to artifact. */
     protected final Map resolvedDependenciesByName = new HashMap();
 
     protected Strategy defaultStrategyType;
@@ -218,7 +235,15 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
         try {
             checkExceptions();
 
-            resolveDependencies();
+            final DependencyNode node = treeBuilder.buildDependencyTree(project, localRepository, artifactFactory, artifactMetadataSource, null, artifactCollector);
+
+            for (final Iterator dependencyIt = node.iterator(); dependencyIt.hasNext(); ) {
+                final DependencyNode dependency = (DependencyNode) dependencyIt.next();
+                if (dependency.getState() == DependencyNode.INCLUDED) {
+                    final Artifact artifact = dependency.getArtifact();
+                    resolvedDependenciesByName.put(getQualifiedName(artifact), artifact);
+                }
+            }
 
             loadResolvers(resolvers);
 
@@ -656,44 +681,11 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
     }
 
     /**
-     * Resolves the direct dependencies of the project to test and stores the result in resolvedDependenciesByName.
-     */
-    private void resolveDependencies()
-    {
-        Collection resolvedDependencies = null;
-
-        // first we resolve the dependencies for the current project
-        try {
-
-            // "true" == include all optional dependencies. They are part of the dependency resolution for the immediate
-            //           project but not for any transitive dependencies.
-            resolvedDependencies = resolveDependenciesInItsOwnScope(project, null, true);
-        }
-        catch (InvalidDependencyVersionException ex) {
-            LOG.error("Could not properly resolve all dependencies", ex);
-        }
-        catch (MultipleArtifactsNotFoundException ex) {
-            logArtifactResolutionException(ex);
-
-            // Keep checking the dependencies that we have so far.
-            resolvedDependencies = ex.getResolvedArtifacts();
-        }
-        catch (AbstractArtifactResolutionException ex) {
-            logArtifactResolutionException(ex);
-        }
-
-        if (resolvedDependencies != null) {
-            for (Iterator iter = resolvedDependencies.iterator(); iter.hasNext();) {
-                Artifact artifact = (Artifact)iter.next();
-
-                resolvedDependenciesByName.put(getQualifiedName(artifact), artifact);
-            }
-        }
-    }
-
-
-    /**
      * Returns a Set of artifacts based off the given project. Artifacts can be filtered and optional dependencies can be excluded.
+     *
+     * It would be awesome if this method would also use the DependencyTreeBuilder which seems to yield better results (and is much closer to the actual compile tree in some cases)
+     * than the artifactResolver. However, due to MNG-3236 the artifact filter is not applied when resolving dependencies and this method relies on the artifact filter to get
+     * the scoping right. Well, maybe in maven 3.0 this will be better. Or different. Whatever comes first.
      */
     private Set resolveDependenciesInItsOwnScope(final MavenProject project, final ArtifactFilter filter, final boolean includeOptional) throws InvalidDependencyVersionException, ArtifactResolutionException, ArtifactNotFoundException
     {
@@ -716,6 +708,10 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
 
     /**
      * Returns a Set of artifacts based off another artifact. The list of artifacts resolved can be filtered.
+     *
+     * It would be awesome if this method would also use the DependencyTreeBuilder which seems to yield better results (and is much closer to the actual compile tree in some cases)
+     * than the artifactResolver. However, due to MNG-3236 the artifact filter is not applied when resolving dependencies and this method relies on the artifact filter to get
+     * the scoping right. Well, maybe in maven 3.0 this will be better. Or different. Whatever comes first.
      */
     private Set resolveDependenciesInItsOwnScope(final Artifact artifact, final ArtifactFilter filter) throws InvalidDependencyVersionException, ArtifactResolutionException, ArtifactNotFoundException, ProjectBuildingException
     {
