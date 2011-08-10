@@ -155,6 +155,19 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
     protected VersionCheckExcludes[] exceptions;
 
     /**
+     * Skip the plugin execution.
+     *
+     * <pre>
+     *   <configuration>
+     *     <skip>true</skip>
+     *   </configuration>
+     * </pre>
+     *
+     * @parameter default-value="false"
+     */
+    protected boolean skip = false;
+
+    /**
      * Whether to warn if the resolved major version is higher then the expected one of the project or one of the depedencies.
      * @parameter default-value="false"
      */
@@ -233,27 +246,32 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
         MavenLogAppender.startPluginLog(this);
 
         try {
-            checkExceptions();
+            if (skip) {
+                LOG.debug("Skipping execution!");
+            }
+            else {
+                checkExceptions();
 
-            final DependencyNode node = treeBuilder.buildDependencyTree(project, localRepository, artifactFactory, artifactMetadataSource, null, artifactCollector);
+                final DependencyNode node = treeBuilder.buildDependencyTree(project, localRepository, artifactFactory, artifactMetadataSource, null, artifactCollector);
 
-            for (final Iterator dependencyIt = node.iterator(); dependencyIt.hasNext(); ) {
-                final DependencyNode dependency = (DependencyNode) dependencyIt.next();
-                if (dependency.getState() == DependencyNode.INCLUDED) {
-                    final Artifact artifact = dependency.getArtifact();
-                    resolvedDependenciesByName.put(getQualifiedName(artifact), artifact);
+                for (final Iterator dependencyIt = node.iterator(); dependencyIt.hasNext(); ) {
+                    final DependencyNode dependency = (DependencyNode) dependencyIt.next();
+                    if (dependency.getState() == DependencyNode.INCLUDED) {
+                        final Artifact artifact = dependency.getArtifact();
+                        resolvedDependenciesByName.put(getQualifiedName(artifact), artifact);
+                    }
                 }
+
+                loadResolvers(resolvers);
+
+                defaultStrategyType = strategyProvider.forName(defaultStrategy);
+                if (defaultStrategyType == null) {
+                    throw new MojoExecutionException("Could not locate default strategy '" + defaultStrategy + "'!");
+                }
+
+                LOG.debug("Starting {} mojo run!", this.getClass().getSimpleName());
+                doExecute();
             }
-
-            loadResolvers(resolvers);
-
-            defaultStrategyType = strategyProvider.forName(defaultStrategy);
-            if (defaultStrategyType == null) {
-                throw new MojoExecutionException("Could not locate default strategy '" + defaultStrategy + "'!");
-            }
-
-            LOG.debug("Starting {} mojo run!", this.getClass().getSimpleName());
-            doExecute();
         }
         catch (MojoExecutionException me) {
             throw me;
