@@ -89,10 +89,10 @@ public final class VersionElement
         return (divider & Version.END_OF_VERSION) != 0;
     }
 
-    public int getNumber()
+    public long getNumber()
     {
         if (!hasNumbers()) {
-            return 0;
+            return 0l;
         }
         else {
 
@@ -110,7 +110,7 @@ public final class VersionElement
                 result = sb.toString();
             }
 
-            return Integer.parseInt(result, 10);
+            return Long.parseLong(result, 10);
         }
     }
 

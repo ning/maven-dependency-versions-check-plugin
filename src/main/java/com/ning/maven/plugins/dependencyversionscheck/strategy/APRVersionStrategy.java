@@ -94,10 +94,10 @@ public class APRVersionStrategy implements Strategy
             return null;
         }
 
-        final int major = versionElements[0].getNumber();
-        final int minor = versionElements[1].getNumber();
+        final long major = versionElements[0].getNumber();
+        final long minor = versionElements[1].getNumber();
 
-        int patch = 0;
+        long patch = 0;
         int qualifierStart = 1;
 
         if (versionElements.length > 2) {
@@ -117,12 +117,12 @@ public class APRVersionStrategy implements Strategy
 
     public static final class AprVersion
     {
-        private final int major;
-        private final int minor;
-        private final int patch;
+        private final long major;
+        private final long minor;
+        private final long patch;
         private final String qualifier;
 
-        public AprVersion(int major, int minor, int patch, String qualifier)
+        public AprVersion(long major, long minor, long patch, String qualifier)
         {
             this.major = major;
             this.minor = minor;
@@ -130,17 +130,17 @@ public class APRVersionStrategy implements Strategy
             this.qualifier = qualifier;
         }
 
-        public int getMajor()
+        public long getMajor()
         {
             return major;
         }
 
-        public int getMinor()
+        public long getMinor()
         {
             return minor;
         }
 
-        public int getPatch()
+        public long getPatch()
         {
             return patch;
         }
