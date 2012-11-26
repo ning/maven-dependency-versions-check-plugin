@@ -177,7 +177,7 @@ Defines a version strategy resolver. Version strategy resolvers are used to dete
         <resolvers>
           <resolver>
             <id>apache-dependencies</id>
-            <strategy>apr</strategy>
+            <strategyName>apr</strategyName>
             <includes>
               <include>commons-configuration:commons-configuration</include>
               <include>org.apache.commons:*</include>
@@ -188,7 +188,7 @@ Defines a version strategy resolver. Version strategy resolvers are used to dete
         </resolvers>
       </configuration>
 
-A resolver contains a strategy name (<strategy>) and a list of one or more includes to list the patterns of artifacts for which this resolvers should be used. Patterns can contain
+A resolver contains a strategy name (<strategyName>) and a list of one or more includes to list the patterns of artifacts for which this resolvers should be used. Patterns can contain
 wildcards (*) for both group and artifactName.
 
 See below for more details on strategy resolvers.
