@@ -196,7 +196,7 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
     /**
      * Sets the default strategy.
      *
-     * @parameter alias="defaultStrategy" default-value="default"
+     * @parameter alias="defaultStrategy" default-value="default" expression="${check.defaultStrategy}"
      *
      */
     protected String defaultStrategy = "default";

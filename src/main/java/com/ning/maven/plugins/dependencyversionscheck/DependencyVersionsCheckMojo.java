@@ -43,7 +43,7 @@ public class DependencyVersionsCheckMojo extends AbstractDependencyVersionsMojo
 {
     /**
      * Whether the mojo should fail the build if a conflict was found.
-     * @parameter default-value="false"
+     * @parameter default-value="false" expression="${check.failBuildInCaseOfConflict}"
      */
     protected boolean failBuildInCaseOfConflict;
 
