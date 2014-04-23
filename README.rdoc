@@ -163,6 +163,8 @@ Boolean flag that enables warnings if a dependency that was excluded from versio
 
 == failBuildInCaseOfConflict (check only)
 
+User property is: +check.failBuildInCaseOfConflict+
+
 Boolean flag that will turn warnings about dependency problems into error messages and fail the build accordingly. Default value is "false" (only report warnings).
     
       <configuration>
@@ -194,6 +196,8 @@ wildcards (*) for both group and artifactName.
 See below for more details on strategy resolvers.
 
 == defaultStrategy
+
+User property is: +check.defaultStrategy+
 
 Selects the default strategy to fall back on when no match is found in the resolvers configuration. Defaults to "default".
 
