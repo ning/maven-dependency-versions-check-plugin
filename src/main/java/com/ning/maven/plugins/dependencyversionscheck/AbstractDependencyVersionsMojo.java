@@ -153,6 +153,13 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
      * @parameter alias="exceptions"
      */
     protected VersionCheckExcludes[] exceptions;
+    
+    /**
+     * A comma separated list of GAV-like (groupid:artifactId:expectedVersion:resolvedVersion) to be excluded (see exceptions).
+     * 
+     * @parameter expression="${check.exceptions} 
+     */
+    protected String stringExceptions;
 
     /**
      * Skip the plugin execution.
@@ -250,6 +257,7 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
                 LOG.debug("Skipping execution!");
             }
             else {
+                addStringExceptions();
                 checkExceptions();
 
                 final DependencyNode node = treeBuilder.buildDependencyTree(project, localRepository, artifactFactory, artifactMetadataSource, null, artifactCollector);
@@ -663,6 +671,40 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
         }
 
         return resolutions;
+    }
+
+    /**
+     * Add the exceptions specificed by GAV-like Strings to the 'exceptions' array
+     * 
+     * @throws MojoExecutionException
+     */
+    private void addStringExceptions() throws MojoExecutionException {
+        List excludeList = new ArrayList();
+        if (stringExceptions != null) {
+            final String[] splitted = stringExceptions.split(",");
+            for (int i = 0; i < splitted.length; i++) {
+                final String part = splitted[i];
+                String[] elements = part.split(":");
+                
+                VersionCheckExcludes versionCheckExclude = new VersionCheckExcludes();
+                if (elements.length == 2) {
+                    versionCheckExclude.setGroupdId(elements[0]);
+                    versionCheckExclude.setArtifactId(elements[1]);
+                    excludeList.add(versionCheckExclude);
+                } else
+                if (elements.length == 4) {
+                    versionCheckExclude.setGroupdId(elements[0]);
+                    versionCheckExclude.setArtifactId(elements[1]);
+                    versionCheckExclude.setExpectedVersion(elements[2]);
+                    versionCheckExclude.setResolvedVersion(elements[3]);
+                    excludeList.add(versionCheckExclude);
+                } else {
+                    throw new MojoExecutionException("Invalid formatted exceptions, failed here: " + part);
+                }
+            }
+        }
+        VersionCheckExcludes[] newExcludes = (VersionCheckExcludes[]) excludeList.toArray(new VersionCheckExcludes[] {});
+        exceptions = (VersionCheckExcludes[]) ArrayUtils.addAll(exceptions, newExcludes);
     }
 
     /**

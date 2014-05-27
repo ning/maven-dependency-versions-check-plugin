@@ -152,6 +152,20 @@ was resolved or required, say 1.2.15, then you will get additional warnings/erro
 
 An exception must have all four elements (groupId, artifactId, expectedVersion and resolvedVersion) present.
 
+== Use commandline exclusions
+
+Exclusion without an version range can be specified on the commandline to ignore a artifact completely.
+
+Specify one or multiple artifacts separated by comma:
+
+    -Dcheck.exceptions=tablelayout:TableLayout,tablelayout:TableLayout
+
+You can also specify resolved/expected versions as in the XML-Configuration above
+    -Dcheck.exceptions=log4j:log4j:1.2.131.2.16
+
+The notation is:
+	-Dcheck.exceptions=[groupid:artifactid[:expected-version:resolved-version]][,groupid:artifactid[:expected-version:resolved-version]]*
+
 == warnIfMajorVersionIsHigher
 
 Boolean flag that enables warnings if a dependency that was excluded from version resolution depends on an incompatible version 
@@ -480,4 +494,3 @@ This will have the effect of excluding the version of D that C brings to the par
 
 There are additional, subtle interactions when enforced versions come into play (e.g. <tt>[1.0]</tt> in B's POM). You should generally avoid enforcing
 versions this way.
-

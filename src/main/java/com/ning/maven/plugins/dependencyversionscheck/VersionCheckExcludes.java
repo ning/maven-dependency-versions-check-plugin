@@ -60,9 +60,9 @@ public class VersionCheckExcludes
         this.resolvedVersion = new Version(versionStr);
     }
 
-    public boolean check()
-    {
-        return !StringUtils.isEmpty(groupId) && !StringUtils.isEmpty(artifactId) && (expectedVersion != null) && (resolvedVersion != null);
+    public boolean check() {
+        return (!StringUtils.isEmpty(groupId) && !StringUtils.isEmpty(artifactId) && (expectedVersion != null) && (resolvedVersion != null))
+                || (!StringUtils.isEmpty(groupId) && !StringUtils.isEmpty(artifactId) && (expectedVersion == null) && (resolvedVersion == null));
     }
 
     public String toString()
@@ -81,19 +81,30 @@ public class VersionCheckExcludes
             builder.append(classifier);
         }
         builder.append(" ");
-        builder.append(expectedVersion.getSelectedVersion());
+        if (expectedVersion != null)
+            builder.append(expectedVersion.getSelectedVersion());
+        else
+            builder.append("<unspecified expected version>");
         builder.append(" vs. ");
-        builder.append(resolvedVersion.getSelectedVersion());
+        if (resolvedVersion != null)
+            builder.append(resolvedVersion.getSelectedVersion());
+        else
+            builder.append("<unspecified resolved version>");
         return builder.toString();
     }
 
-    public boolean matches(Artifact artifact, Version expectedVersion, Version resolvedVersion)
-    {
-        return StringUtils.equals(groupId, artifact.getGroupId()) &&
-               StringUtils.equals(artifactId, artifact.getArtifactId()) &&
-               StringUtils.equals(classifier, artifact.getClassifier()) &&
-               StringUtils.equals(type, artifact.getType()) &&
-               this.expectedVersion.equals(expectedVersion) &&
-               this.resolvedVersion.equals(resolvedVersion);
+    public boolean matches(Artifact artifact, Version expectedVersion, Version resolvedVersion) {
+        return (StringUtils.equals(groupId, artifact.getGroupId()) //
+                && StringUtils.equals(artifactId, artifact.getArtifactId()) //
+                && StringUtils.equals(classifier, artifact.getClassifier()) //
+                && StringUtils.equals(type, artifact.getType()) //
+                && this.expectedVersion == null //
+        && this.resolvedVersion == null)
+                || (StringUtils.equals(groupId, artifact.getGroupId()) //
+                        && StringUtils.equals(artifactId, artifact.getArtifactId()) //
+                        && StringUtils.equals(classifier, artifact.getClassifier())
+                        && StringUtils.equals(type, artifact.getType()) //
+                        && this.expectedVersion.equals(expectedVersion) //
+                && this.resolvedVersion.equals(resolvedVersion));//
     }
 }
