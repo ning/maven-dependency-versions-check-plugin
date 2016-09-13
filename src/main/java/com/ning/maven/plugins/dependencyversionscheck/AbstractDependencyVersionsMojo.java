@@ -26,12 +26,16 @@ import java.util.Map;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.Lock;
 import java.util.regex.Pattern;
 
+import com.google.common.util.concurrent.Striped;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.lang.ArrayUtils;
 import org.apache.commons.lang.StringUtils;
@@ -178,6 +182,14 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
     protected boolean warnIfMajorVersionIsHigher;
 
     /**
+     * Whether to run dependency resolution in parallel.
+     * @parameter expression="useParallelDependencyResolution"
+     * default-value="true"
+     *
+     */
+    protected boolean useParallelDependencyResolution;
+
+    /**
      * Resolvers to resolve versions and compare existing things.
      *
      * <pre>
@@ -245,17 +257,10 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
     /** Keeps track of the longest name for an artifact for printing out nicely. */
     protected int maxLen = -1;
 
-    private final ExecutorService executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() * 5, new ThreadFactory() {
-        final AtomicInteger threadCount = new AtomicInteger();
+    private final ExecutorService executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() * 5,
+            new ThreadFactoryBuilder().setNameFormat("dependency-version-check-worker-%s").setDaemon(true).build());
 
-        public Thread newThread(Runnable r) {
-            Thread th = new Thread(r, "dependency-version-check worker #" + threadCount.getAndIncrement());
-            th.setDaemon(true);
-            return th;
-        }
-
-        ;
-    });
+    private final Striped<Lock> resolutionMapLocks = Striped.lock(Runtime.getRuntime().availableProcessors() * 5);
 
     public void execute() throws MojoExecutionException, MojoFailureException
     {
@@ -299,6 +304,7 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
             throw new MojoExecutionException("While running mojo: ", e);
         }
         finally {
+            executorService.shutdown();
             LOG.debug("Ended {} mojo run!", this.getClass().getSimpleName());
             MavenLogAppender.endPluginLog(this);
         }
@@ -424,19 +430,21 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
         // Map from artifactName --> list of resolutions found on the tree
         final SortedMap resolutionMap = new TreeMap();
         final List errors = new ArrayList();
-        boolean useParallelDepResolution = "true".equalsIgnoreCase(getPropertyOrDefault("dependency.version.check.useParallelDepResolution", "true"));
-        LOG.info("Using parallel dependency resolution: " + useParallelDepResolution);
+        final CountDownLatch latch = new CountDownLatch(project.getDependencies().size());
+        LOG.debug("Using parallel dependency resolution: " + useParallelDependencyResolution);
 
         for (final Iterator iter = project.getDependencies().iterator(); iter.hasNext();) {
             final Dependency dependency = (Dependency) iter.next();
 
-            if (useParallelDepResolution) {
+            if (useParallelDependencyResolution) {
                 executorService.submit(new Runnable() {
                     public void run() {
                         try {
                             updateResolutionMapForDep(visibleScopes, transitiveScopes, resolutionMap, dependency);
                         } catch (Throwable throwable) {
                             errors.add(throwable);
+                        } finally {
+                            latch.countDown();
                         }
                     }
                 });
@@ -444,18 +452,17 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
                 updateResolutionMapForDep(visibleScopes, transitiveScopes, resolutionMap, dependency);
             }
         }
+        if (useParallelDependencyResolution) {
+            try {
+                latch.await();
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+        }
         if (errors.size() > 0) {
             throw new RuntimeException((Throwable) errors.get(0));
         }
         return resolutionMap;
-    }
-
-    private String getPropertyOrDefault(String key, String defaultValue) {
-        String value = System.getProperty(key);
-        if (value == null || value.trim().length() == 0) {
-            return defaultValue;
-        }
-        return value;
     }
 
     private void updateResolutionMapForDep(String[] visibleScopes, String[] transitiveScopes, SortedMap resolutionMap, Dependency dependency) throws InvalidDependencyVersionException, ProjectBuildingException, ArtifactResolutionException, ArtifactNotFoundException {
@@ -533,7 +540,9 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
      */
     private void addToResolutionMap(final Map resolutionMap, final VersionResolution resolution)
     {
-        synchronized (resolution.getDependencyName().intern()) {
+        Lock lock = resolutionMapLocks.get(resolution.getDependencyName());
+        lock.lock();
+        try {
             List resolutions = (List) resolutionMap.get(resolution.getDependencyName());
             if (resolutions == null) {
                 resolutions = new ArrayList();
@@ -551,6 +560,8 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
             }
             LOG.debug("Adding resolution: {}", resolution);
             resolutions.add(resolution);
+        } finally {
+            lock.unlock();
         }
     }
 

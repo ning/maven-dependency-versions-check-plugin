@@ -48,7 +48,7 @@
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <version.maven>2.2.1</version.maven>
-    <version.jdk>1.4</version.jdk>
+    <version.jdk>1.5</version.jdk>
   </properties>
   <dependencies>
     <dependency>
@@ -95,6 +95,11 @@
         <groupId>com.pyx4j</groupId>
         <artifactId>maven-plugin-log4j</artifactId>
         <version>1.0.1</version>
+    </dependency>
+    <dependency>
+      <groupId>com.google.guava</groupId>
+      <artifactId>guava</artifactId>
+      <version>19.0</version>
     </dependency>
   </dependencies>
   <build>
