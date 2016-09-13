@@ -26,6 +26,10 @@ import java.util.Map;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 
 import org.apache.commons.collections.CollectionUtils;
@@ -241,6 +245,18 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
     /** Keeps track of the longest name for an artifact for printing out nicely. */
     protected int maxLen = -1;
 
+    private final ExecutorService executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() * 5, new ThreadFactory() {
+        final AtomicInteger threadCount = new AtomicInteger();
+
+        public Thread newThread(Runnable r) {
+            Thread th = new Thread(r, "dependency-version-check worker #" + threadCount.getAndIncrement());
+            th.setDaemon(true);
+            return th;
+        }
+
+        ;
+    });
+
     public void execute() throws MojoExecutionException, MojoFailureException
     {
         MavenLogAppender.startPluginLog(this);
@@ -407,66 +423,96 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
 
         // Map from artifactName --> list of resolutions found on the tree
         final SortedMap resolutionMap = new TreeMap();
+        final List errors = new ArrayList();
+        boolean useParallelDepResolution = "true".equalsIgnoreCase(getPropertyOrDefault("dependency.version.check.useParallelDepResolution", "true"));
+        LOG.info("Using parallel dependency resolution: " + useParallelDepResolution);
 
         for (final Iterator iter = project.getDependencies().iterator(); iter.hasNext();) {
             final Dependency dependency = (Dependency) iter.next();
 
-            LOG.debug("Checking direct dependency {}...", dependency);
-            if (!isVisible(dependency.getScope(), visibleScopes)) {
-                LOG.debug("... in invisible scope, ignoring!");
-                continue; // for;
-            }
-
-            LOG.debug("... visible, resolving");
-
-            // Dependency is visible, now resolve it.
-            final String artifactName = getQualifiedName(dependency);
-
-            if (artifactName.length() > maxLen) {
-                maxLen = artifactName.length();
-            }
-
-            final Artifact resolvedArtifact = (Artifact) resolvedDependenciesByName.get(artifactName);
-
-            if (resolvedArtifact == null) {
-                // This is a potential problem because it should not be possible that a dependency that is required
-                // by the project is not in the list of resolved dependencies. 
-                LOG.warn("No artifact available for '{}' (probably a multi-module child artifact).", artifactName);
-            }
-            else {
-                final VersionResolution resolution = resolveVersion(dependency, resolvedArtifact, artifactName, true);
-                addToResolutionMap(resolutionMap, resolution);
-
-                if (!ArrayUtils.isEmpty(transitiveScopes)) {
-
-                    final ArtifactFilter scopeFilter = new ArtifactScopeFilter(transitiveScopes);
-
-                    // List of VersionResolution objects.
-                    List transitiveDependencies = null;
-
-                    try {
-                        transitiveDependencies = resolveTransitiveVersions(dependency, resolvedArtifact, artifactName, scopeFilter);
-                    }
-                    catch (MultipleArtifactsNotFoundException ex) {
-                        logArtifactResolutionException(ex);
-                        transitiveDependencies = resolveTransitiveVersions(dependency, ex.getResolvedArtifacts(), artifactName, scopeFilter);
-                    }
-                    catch (AbstractArtifactResolutionException ex) {
-                        logArtifactResolutionException(ex);
-                    }
-
-                    if (transitiveDependencies != null) {
-                        LOG.debug("Artifact {} contributes {}", artifactName, transitiveDependencies);
-                        for (Iterator transitiveIt = transitiveDependencies.iterator(); transitiveIt.hasNext(); )
-                        {
-                            final VersionResolution versionResolution = (VersionResolution) transitiveIt.next();
-                            addToResolutionMap(resolutionMap, versionResolution);
+            if (useParallelDepResolution) {
+                executorService.submit(new Runnable() {
+                    public void run() {
+                        try {
+                            updateResolutionMapForDep(visibleScopes, transitiveScopes, resolutionMap, dependency);
+                        } catch (Throwable throwable) {
+                            errors.add(throwable);
                         }
+                    }
+                });
+            } else {
+                updateResolutionMapForDep(visibleScopes, transitiveScopes, resolutionMap, dependency);
+            }
+        }
+        if (errors.size() > 0) {
+            throw new RuntimeException((Throwable) errors.get(0));
+        }
+        return resolutionMap;
+    }
+
+    private String getPropertyOrDefault(String key, String defaultValue) {
+        String value = System.getProperty(key);
+        if (value == null || value.trim().length() == 0) {
+            return defaultValue;
+        }
+        return value;
+    }
+
+    private void updateResolutionMapForDep(String[] visibleScopes, String[] transitiveScopes, SortedMap resolutionMap, Dependency dependency) throws InvalidDependencyVersionException, ProjectBuildingException, ArtifactResolutionException, ArtifactNotFoundException {
+        LOG.debug("Checking direct dependency {}...", dependency);
+        if (!isVisible(dependency.getScope(), visibleScopes)) {
+            LOG.debug("... in invisible scope, ignoring!");
+            return;
+        }
+
+        LOG.debug("... visible, resolving");
+
+        // Dependency is visible, now resolve it.
+        final String artifactName = getQualifiedName(dependency);
+
+        if (artifactName.length() > maxLen) {
+            maxLen = artifactName.length();
+        }
+
+        final Artifact resolvedArtifact = (Artifact) resolvedDependenciesByName.get(artifactName);
+
+        if (resolvedArtifact == null) {
+            // This is a potential problem because it should not be possible that a dependency that is required
+            // by the project is not in the list of resolved dependencies.
+            LOG.warn("No artifact available for '{}' (probably a multi-module child artifact).", artifactName);
+        }
+        else {
+            final VersionResolution resolution = resolveVersion(dependency, resolvedArtifact, artifactName, true);
+            addToResolutionMap(resolutionMap, resolution);
+
+            if (!ArrayUtils.isEmpty(transitiveScopes)) {
+
+                final ArtifactFilter scopeFilter = new ArtifactScopeFilter(transitiveScopes);
+
+                // List of VersionResolution objects.
+                List transitiveDependencies = null;
+
+                try {
+                    transitiveDependencies = resolveTransitiveVersions(dependency, resolvedArtifact, artifactName, scopeFilter);
+                }
+                catch (MultipleArtifactsNotFoundException ex) {
+                    logArtifactResolutionException(ex);
+                    transitiveDependencies = resolveTransitiveVersions(dependency, ex.getResolvedArtifacts(), artifactName, scopeFilter);
+                }
+                catch (AbstractArtifactResolutionException ex) {
+                    logArtifactResolutionException(ex);
+                }
+
+                if (transitiveDependencies != null) {
+                    LOG.debug("Artifact {} contributes {}", artifactName, transitiveDependencies);
+                    for (Iterator transitiveIt = transitiveDependencies.iterator(); transitiveIt.hasNext(); )
+                    {
+                        final VersionResolution versionResolution = (VersionResolution) transitiveIt.next();
+                        addToResolutionMap(resolutionMap, versionResolution);
                     }
                 }
             }
         }
-        return resolutionMap;
     }
 
     /**
@@ -487,23 +533,25 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
      */
     private void addToResolutionMap(final Map resolutionMap, final VersionResolution resolution)
     {
-        List resolutions = (List) resolutionMap.get(resolution.getDependencyName());
-        if (resolutions == null) {
-            resolutions = new ArrayList();
-            resolutionMap.put(resolution.getDependencyName(), resolutions);
-        }
-
-        for (Iterator it = resolutions.iterator(); it.hasNext(); ) {
-            final VersionResolution existingResolution = (VersionResolution) it.next();
-            // TODO: It might be reasonable to fail the build in this case. However, I have yet to see
-            // this message... :-) 
-            if (!existingResolution.getActualVersion().equals(resolution.getActualVersion())) {
-                LOG.warn("Dependency '{} expects version '{}' but '{}' already resolved to '{}'!", 
-                         new Object [] { resolution.getDependencyName(), resolution.getActualVersion(), existingResolution.getDependencyName(), existingResolution.getActualVersion() });
+        synchronized (resolution.getDependencyName().intern()) {
+            List resolutions = (List) resolutionMap.get(resolution.getDependencyName());
+            if (resolutions == null) {
+                resolutions = new ArrayList();
+                resolutionMap.put(resolution.getDependencyName(), resolutions);
             }
+
+            for (Iterator it = resolutions.iterator(); it.hasNext(); ) {
+                final VersionResolution existingResolution = (VersionResolution) it.next();
+                // TODO: It might be reasonable to fail the build in this case. However, I have yet to see
+                // this message... :-)
+                if (!existingResolution.getActualVersion().equals(resolution.getActualVersion())) {
+                    LOG.warn("Dependency '{} expects version '{}' but '{}' already resolved to '{}'!",
+                            new Object[]{resolution.getDependencyName(), resolution.getActualVersion(), existingResolution.getDependencyName(), existingResolution.getActualVersion()});
+                }
+            }
+            LOG.debug("Adding resolution: {}", resolution);
+            resolutions.add(resolution);
         }
-        LOG.debug("Adding resolution: {}", resolution);
-        resolutions.add(resolution);
     }
 
     /**
