@@ -26,6 +26,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
@@ -424,6 +425,7 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
         // Map from artifactName --> list of resolutions found on the tree
         final SortedMap resolutionMap = new TreeMap();
         final List errors = new ArrayList();
+        final CountDownLatch latch = new CountDownLatch(project.getDependencies().size());
         boolean useParallelDepResolution = "true".equalsIgnoreCase(getPropertyOrDefault("dependency.version.check.useParallelDepResolution", "true"));
         LOG.info("Using parallel dependency resolution: " + useParallelDepResolution);
 
@@ -437,11 +439,20 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
                             updateResolutionMapForDep(visibleScopes, transitiveScopes, resolutionMap, dependency);
                         } catch (Throwable throwable) {
                             errors.add(throwable);
+                        } finally {
+                            latch.countDown();
                         }
                     }
                 });
             } else {
                 updateResolutionMapForDep(visibleScopes, transitiveScopes, resolutionMap, dependency);
+            }
+        }
+        if (useParallelDepResolution) {
+            try {
+                latch.await();
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
             }
         }
         if (errors.size() > 0) {
