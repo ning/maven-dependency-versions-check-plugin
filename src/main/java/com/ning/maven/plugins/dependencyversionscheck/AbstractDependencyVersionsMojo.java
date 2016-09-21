@@ -26,16 +26,13 @@ import java.util.Map;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Lock;
 import java.util.regex.Pattern;
 
-import com.google.common.util.concurrent.Striped;
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import com.google.common.base.Throwables;
+import com.google.common.util.concurrent.*;
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.lang.ArrayUtils;
 import org.apache.commons.lang.StringUtils;
@@ -86,6 +83,8 @@ import com.pyx4j.log4j.MavenLogAppender;
  */
 public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
 {
+    private static final int DEPENDENCY_RESOLUTION_NUM_THREADS = Runtime.getRuntime().availableProcessors() * 5;
+
     /**
      * The maven project (effective pom).
      * @parameter expression="${project}"
@@ -257,10 +256,10 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
     /** Keeps track of the longest name for an artifact for printing out nicely. */
     protected int maxLen = -1;
 
-    private final ExecutorService executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() * 5,
-            new ThreadFactoryBuilder().setNameFormat("dependency-version-check-worker-%s").setDaemon(true).build());
+    private final ListeningExecutorService executorService = MoreExecutors.listeningDecorator(Executors.newFixedThreadPool(DEPENDENCY_RESOLUTION_NUM_THREADS,
+            new ThreadFactoryBuilder().setNameFormat("dependency-version-check-worker-%s").setDaemon(true).build()));
 
-    private final Striped<Lock> resolutionMapLocks = Striped.lock(Runtime.getRuntime().availableProcessors() * 5);
+    private final Striped<Lock> resolutionMapLocks = Striped.lock(DEPENDENCY_RESOLUTION_NUM_THREADS);
 
     public void execute() throws MojoExecutionException, MojoFailureException
     {
@@ -304,7 +303,7 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
             throw new MojoExecutionException("While running mojo: ", e);
         }
         finally {
-            executorService.shutdown();
+            executorService.shutdownNow();
             LOG.debug("Ended {} mojo run!", this.getClass().getSimpleName());
             MavenLogAppender.endPluginLog(this);
         }
@@ -428,44 +427,45 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
         }
 
         // Map from artifactName --> list of resolutions found on the tree
-        final SortedMap resolutionMap = new TreeMap();
-        final List errors = new ArrayList();
-        final CountDownLatch latch = new CountDownLatch(project.getDependencies().size());
+        final SortedMap resolutionMap = Collections.synchronizedSortedMap(new TreeMap());
+        final List futures = new ArrayList();
         LOG.debug("Using parallel dependency resolution: " + useParallelDependencyResolution);
 
         for (final Iterator iter = project.getDependencies().iterator(); iter.hasNext();) {
             final Dependency dependency = (Dependency) iter.next();
 
             if (useParallelDependencyResolution) {
-                executorService.submit(new Runnable() {
+                futures.add(executorService.submit(new Runnable() {
                     public void run() {
                         try {
                             updateResolutionMapForDep(visibleScopes, transitiveScopes, resolutionMap, dependency);
-                        } catch (Throwable throwable) {
-                            errors.add(throwable);
-                        } finally {
-                            latch.countDown();
+                        }
+                        catch (Exception e) {
+                            Throwables.propagate(e);
                         }
                     }
-                });
+                }));
             } else {
                 updateResolutionMapForDep(visibleScopes, transitiveScopes, resolutionMap, dependency);
             }
         }
         if (useParallelDependencyResolution) {
             try {
-                latch.await();
-            } catch (InterruptedException e) {
-                throw new RuntimeException(e);
+                Futures.allAsList(futures).get();
             }
-        }
-        if (errors.size() > 0) {
-            throw new RuntimeException((Throwable) errors.get(0));
+            catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                Throwables.propagate(e);
+            }
+            catch (ExecutionException e) {
+                Throwables.propagate(e);
+            }
         }
         return resolutionMap;
     }
 
-    private void updateResolutionMapForDep(String[] visibleScopes, String[] transitiveScopes, SortedMap resolutionMap, Dependency dependency) throws InvalidDependencyVersionException, ProjectBuildingException, ArtifactResolutionException, ArtifactNotFoundException {
+    private void updateResolutionMapForDep(String[] visibleScopes, String[] transitiveScopes, SortedMap resolutionMap, Dependency dependency) throws InvalidDependencyVersionException, ProjectBuildingException, ArtifactResolutionException, ArtifactNotFoundException
+    {
         LOG.debug("Checking direct dependency {}...", dependency);
         if (!isVisible(dependency.getScope(), visibleScopes)) {
             LOG.debug("... in invisible scope, ignoring!");
@@ -541,6 +541,7 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
     private void addToResolutionMap(final Map resolutionMap, final VersionResolution resolution)
     {
         Lock lock = resolutionMapLocks.get(resolution.getDependencyName());
+        // lock to protect mutation on the list per dependency as this can potentially run in multiple threads
         lock.lock();
         try {
             List resolutions = (List) resolutionMap.get(resolution.getDependencyName());
