@@ -26,8 +26,13 @@ import java.util.Map;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.Lock;
 import java.util.regex.Pattern;
 
+import com.google.common.base.Throwables;
+import com.google.common.util.concurrent.*;
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.lang.ArrayUtils;
 import org.apache.commons.lang.StringUtils;
@@ -78,6 +83,8 @@ import com.pyx4j.log4j.MavenLogAppender;
  */
 public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
 {
+    private static final int DEPENDENCY_RESOLUTION_NUM_THREADS = Runtime.getRuntime().availableProcessors() * 5;
+
     /**
      * The maven project (effective pom).
      * @parameter expression="${project}"
@@ -174,6 +181,14 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
     protected boolean warnIfMajorVersionIsHigher;
 
     /**
+     * Whether to run dependency resolution in parallel.
+     * @parameter expression="useParallelDependencyResolution"
+     * default-value="true"
+     *
+     */
+    protected boolean useParallelDependencyResolution;
+
+    /**
      * Resolvers to resolve versions and compare existing things.
      *
      * <pre>
@@ -241,6 +256,11 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
     /** Keeps track of the longest name for an artifact for printing out nicely. */
     protected int maxLen = -1;
 
+    private final ListeningExecutorService executorService = MoreExecutors.listeningDecorator(Executors.newFixedThreadPool(DEPENDENCY_RESOLUTION_NUM_THREADS,
+            new ThreadFactoryBuilder().setNameFormat("dependency-version-check-worker-%s").setDaemon(true).build()));
+
+    private final Striped<Lock> resolutionMapLocks = Striped.lock(DEPENDENCY_RESOLUTION_NUM_THREADS);
+
     public void execute() throws MojoExecutionException, MojoFailureException
     {
         MavenLogAppender.startPluginLog(this);
@@ -283,6 +303,7 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
             throw new MojoExecutionException("While running mojo: ", e);
         }
         finally {
+            executorService.shutdownNow();
             LOG.debug("Ended {} mojo run!", this.getClass().getSimpleName());
             MavenLogAppender.endPluginLog(this);
         }
@@ -406,67 +427,99 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
         }
 
         // Map from artifactName --> list of resolutions found on the tree
-        final SortedMap resolutionMap = new TreeMap();
+        final SortedMap resolutionMap = Collections.synchronizedSortedMap(new TreeMap());
+        final List futures = new ArrayList();
+        LOG.debug("Using parallel dependency resolution: " + useParallelDependencyResolution);
 
         for (final Iterator iter = project.getDependencies().iterator(); iter.hasNext();) {
             final Dependency dependency = (Dependency) iter.next();
 
-            LOG.debug("Checking direct dependency {}...", dependency);
-            if (!isVisible(dependency.getScope(), visibleScopes)) {
-                LOG.debug("... in invisible scope, ignoring!");
-                continue; // for;
-            }
-
-            LOG.debug("... visible, resolving");
-
-            // Dependency is visible, now resolve it.
-            final String artifactName = getQualifiedName(dependency);
-
-            if (artifactName.length() > maxLen) {
-                maxLen = artifactName.length();
-            }
-
-            final Artifact resolvedArtifact = (Artifact) resolvedDependenciesByName.get(artifactName);
-
-            if (resolvedArtifact == null) {
-                // This is a potential problem because it should not be possible that a dependency that is required
-                // by the project is not in the list of resolved dependencies. 
-                LOG.warn("No artifact available for '{}' (probably a multi-module child artifact).", artifactName);
-            }
-            else {
-                final VersionResolution resolution = resolveVersion(dependency, resolvedArtifact, artifactName, true);
-                addToResolutionMap(resolutionMap, resolution);
-
-                if (!ArrayUtils.isEmpty(transitiveScopes)) {
-
-                    final ArtifactFilter scopeFilter = new ArtifactScopeFilter(transitiveScopes);
-
-                    // List of VersionResolution objects.
-                    List transitiveDependencies = null;
-
-                    try {
-                        transitiveDependencies = resolveTransitiveVersions(dependency, resolvedArtifact, artifactName, scopeFilter);
-                    }
-                    catch (MultipleArtifactsNotFoundException ex) {
-                        logArtifactResolutionException(ex);
-                        transitiveDependencies = resolveTransitiveVersions(dependency, ex.getResolvedArtifacts(), artifactName, scopeFilter);
-                    }
-                    catch (AbstractArtifactResolutionException ex) {
-                        logArtifactResolutionException(ex);
-                    }
-
-                    if (transitiveDependencies != null) {
-                        LOG.debug("Artifact {} contributes {}", artifactName, transitiveDependencies);
-                        for (Iterator transitiveIt = transitiveDependencies.iterator(); transitiveIt.hasNext(); )
-                        {
-                            final VersionResolution versionResolution = (VersionResolution) transitiveIt.next();
-                            addToResolutionMap(resolutionMap, versionResolution);
+            if (useParallelDependencyResolution) {
+                futures.add(executorService.submit(new Runnable() {
+                    public void run() {
+                        try {
+                            updateResolutionMapForDep(visibleScopes, transitiveScopes, resolutionMap, dependency);
                         }
+                        catch (Exception e) {
+                            Throwables.propagate(e);
+                        }
+                    }
+                }));
+            } else {
+                updateResolutionMapForDep(visibleScopes, transitiveScopes, resolutionMap, dependency);
+            }
+        }
+        if (useParallelDependencyResolution) {
+            try {
+                Futures.allAsList(futures).get();
+            }
+            catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                Throwables.propagate(e);
+            }
+            catch (ExecutionException e) {
+                Throwables.propagate(e);
+            }
+        }
+        return resolutionMap;
+    }
+
+    private void updateResolutionMapForDep(String[] visibleScopes, String[] transitiveScopes, SortedMap resolutionMap, Dependency dependency) throws InvalidDependencyVersionException, ProjectBuildingException, ArtifactResolutionException, ArtifactNotFoundException
+    {
+        LOG.debug("Checking direct dependency {}...", dependency);
+        if (!isVisible(dependency.getScope(), visibleScopes)) {
+            LOG.debug("... in invisible scope, ignoring!");
+            return;
+        }
+
+        LOG.debug("... visible, resolving");
+
+        // Dependency is visible, now resolve it.
+        final String artifactName = getQualifiedName(dependency);
+
+        if (artifactName.length() > maxLen) {
+            maxLen = artifactName.length();
+        }
+
+        final Artifact resolvedArtifact = (Artifact) resolvedDependenciesByName.get(artifactName);
+
+        if (resolvedArtifact == null) {
+            // This is a potential problem because it should not be possible that a dependency that is required
+            // by the project is not in the list of resolved dependencies.
+            LOG.warn("No artifact available for '{}' (probably a multi-module child artifact).", artifactName);
+        }
+        else {
+            final VersionResolution resolution = resolveVersion(dependency, resolvedArtifact, artifactName, true);
+            addToResolutionMap(resolutionMap, resolution);
+
+            if (!ArrayUtils.isEmpty(transitiveScopes)) {
+
+                final ArtifactFilter scopeFilter = new ArtifactScopeFilter(transitiveScopes);
+
+                // List of VersionResolution objects.
+                List transitiveDependencies = null;
+
+                try {
+                    transitiveDependencies = resolveTransitiveVersions(dependency, resolvedArtifact, artifactName, scopeFilter);
+                }
+                catch (MultipleArtifactsNotFoundException ex) {
+                    logArtifactResolutionException(ex);
+                    transitiveDependencies = resolveTransitiveVersions(dependency, ex.getResolvedArtifacts(), artifactName, scopeFilter);
+                }
+                catch (AbstractArtifactResolutionException ex) {
+                    logArtifactResolutionException(ex);
+                }
+
+                if (transitiveDependencies != null) {
+                    LOG.debug("Artifact {} contributes {}", artifactName, transitiveDependencies);
+                    for (Iterator transitiveIt = transitiveDependencies.iterator(); transitiveIt.hasNext(); )
+                    {
+                        final VersionResolution versionResolution = (VersionResolution) transitiveIt.next();
+                        addToResolutionMap(resolutionMap, versionResolution);
                     }
                 }
             }
         }
-        return resolutionMap;
     }
 
     /**
@@ -487,23 +540,30 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
      */
     private void addToResolutionMap(final Map resolutionMap, final VersionResolution resolution)
     {
-        List resolutions = (List) resolutionMap.get(resolution.getDependencyName());
-        if (resolutions == null) {
-            resolutions = new ArrayList();
-            resolutionMap.put(resolution.getDependencyName(), resolutions);
-        }
-
-        for (Iterator it = resolutions.iterator(); it.hasNext(); ) {
-            final VersionResolution existingResolution = (VersionResolution) it.next();
-            // TODO: It might be reasonable to fail the build in this case. However, I have yet to see
-            // this message... :-) 
-            if (!existingResolution.getActualVersion().equals(resolution.getActualVersion())) {
-                LOG.warn("Dependency '{} expects version '{}' but '{}' already resolved to '{}'!", 
-                         new Object [] { resolution.getDependencyName(), resolution.getActualVersion(), existingResolution.getDependencyName(), existingResolution.getActualVersion() });
+        Lock lock = resolutionMapLocks.get(resolution.getDependencyName());
+        // lock to protect mutation on the list per dependency as this can potentially run in multiple threads
+        lock.lock();
+        try {
+            List resolutions = (List) resolutionMap.get(resolution.getDependencyName());
+            if (resolutions == null) {
+                resolutions = new ArrayList();
+                resolutionMap.put(resolution.getDependencyName(), resolutions);
             }
+
+            for (Iterator it = resolutions.iterator(); it.hasNext(); ) {
+                final VersionResolution existingResolution = (VersionResolution) it.next();
+                // TODO: It might be reasonable to fail the build in this case. However, I have yet to see
+                // this message... :-)
+                if (!existingResolution.getActualVersion().equals(resolution.getActualVersion())) {
+                    LOG.warn("Dependency '{} expects version '{}' but '{}' already resolved to '{}'!",
+                            new Object[]{resolution.getDependencyName(), resolution.getActualVersion(), existingResolution.getDependencyName(), existingResolution.getActualVersion()});
+                }
+            }
+            LOG.debug("Adding resolution: {}", resolution);
+            resolutions.add(resolution);
+        } finally {
+            lock.unlock();
         }
-        LOG.debug("Adding resolution: {}", resolution);
-        resolutions.add(resolution);
     }
 
     /**
