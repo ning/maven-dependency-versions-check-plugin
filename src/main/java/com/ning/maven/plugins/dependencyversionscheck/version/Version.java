@@ -3,13 +3,13 @@
  *
  * Ning licenses this file to you under the Apache License, version 2.0
  * (the "License"); you may not use this file except in compliance with the
- * License.  You may obtain a copy of the License at:
+ * License. You may obtain a copy of the License at:
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
- * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
  * License for the specific language governing permissions and limitations
  * under the License.
  */
@@ -28,31 +28,31 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 public final class Version implements Comparable
 {
     // Flags for a version element.
-    public static final long ALL_NUMBERS =         0x001;
-    public static final long ALL_LETTERS =         0x002;
-    public static final long ALL_OTHER =           0x004;
+    public static final long ALL_NUMBERS = 0x001;
+    public static final long ALL_LETTERS = 0x002;
+    public static final long ALL_OTHER = 0x004;
     public static final long STARTS_WITH_NUMBERS = 0x008;
     public static final long STARTS_WITH_LETTERS = 0x010;
-    public static final long STARTS_WITH_OTHER =   0x020;
-    public static final long ENDS_WITH_NUMBERS =   0x040;
-    public static final long ENDS_WITH_LETTERS =   0x080;
-    public static final long ENDS_WITH_OTHER =     0x100;
-    public static final long NUMBERS =             0x200;
-    public static final long LETTERS =             0x400;
-    public static final long OTHER =               0x800;
+    public static final long STARTS_WITH_OTHER = 0x020;
+    public static final long ENDS_WITH_NUMBERS = 0x040;
+    public static final long ENDS_WITH_LETTERS = 0x080;
+    public static final long ENDS_WITH_OTHER = 0x100;
+    public static final long NUMBERS = 0x200;
+    public static final long LETTERS = 0x400;
+    public static final long OTHER = 0x800;
 
     // Flags for a version element divider.
-    public static final long DOT_DIVIDER =        0x01;
-    public static final long MINUS_DIVIDER =      0x02;
+    public static final long DOT_DIVIDER = 0x01;
+    public static final long MINUS_DIVIDER = 0x02;
     public static final long UNDERSCORE_DIVIDER = 0x04;
-    public static final long OTHER_DIVIDER =      0x08;
-    public static final long END_OF_VERSION =     0x10;
+    public static final long OTHER_DIVIDER = 0x08;
+    public static final long END_OF_VERSION = 0x10;
 
     private final String rawVersion;
     private final String selectedVersion;
 
-    private final String [] rawElements;
-    private final VersionElement [] versionElements;
+    private final String[] rawElements;
+    private final VersionElement[] versionElements;
 
     private final int elementCount;
 
@@ -112,13 +112,14 @@ public final class Version implements Comparable
             final String element = StringUtils.trimToEmpty(rawElement);
 
             if (!StringUtils.isBlank(element)) {
-                long flags = ALL_NUMBERS|ALL_LETTERS|ALL_OTHER;
+                long flags = ALL_NUMBERS | ALL_LETTERS | ALL_OTHER;
                 final char firstChar = element.charAt(0);
-                final char lastChar =  element.charAt(element.length()-1);
+                final char lastChar = element.charAt(element.length() - 1);
 
                 if (Character.isDigit(firstChar)) {
                     flags |= STARTS_WITH_NUMBERS;
-                } else if (Character.isLetter(firstChar)) {
+                }
+                else if (Character.isLetter(firstChar)) {
                     flags |= STARTS_WITH_LETTERS;
                 }
                 else {
@@ -127,7 +128,8 @@ public final class Version implements Comparable
 
                 if (Character.isDigit(lastChar)) {
                     flags |= ENDS_WITH_NUMBERS;
-                } else if (Character.isLetter(lastChar)) {
+                }
+                else if (Character.isLetter(lastChar)) {
                     flags |= ENDS_WITH_LETTERS;
                 }
                 else {
@@ -137,14 +139,15 @@ public final class Version implements Comparable
                 for (int j = 0; j < element.length(); j++) {
 
                     if (Character.isDigit(element.charAt(j))) {
-                        flags &= ~(ALL_LETTERS|ALL_OTHER);
+                        flags &= ~(ALL_LETTERS | ALL_OTHER);
                         flags |= NUMBERS;
-                    } else if (Character.isLetter(element.charAt(j))) {
-                        flags &= ~(ALL_NUMBERS|ALL_OTHER);
+                    }
+                    else if (Character.isLetter(element.charAt(j))) {
+                        flags &= ~(ALL_NUMBERS | ALL_OTHER);
                         flags |= LETTERS;
                     }
                     else {
-                        flags &=  ~(ALL_LETTERS|ALL_NUMBERS);
+                        flags &= ~(ALL_LETTERS | ALL_NUMBERS);
                         flags |= OTHER;
                     }
                 }
@@ -190,8 +193,14 @@ public final class Version implements Comparable
 
     public boolean equals(final Object other)
     {
-        if (!(other instanceof Version))
+        if (other == null || other.getClass() != this.getClass()) {
             return false;
+        }
+
+        if (other == this) {
+            return true;
+        }
+
         Version castOther = (Version) other;
         return new EqualsBuilder().append(rawVersion, castOther.rawVersion)
             .append(selectedVersion, castOther.selectedVersion)
@@ -213,7 +222,8 @@ public final class Version implements Comparable
         return hashCode;
     }
 
-    public int compareTo(Object o) {
+    public int compareTo(Object o)
+    {
         return selectedVersion.compareTo(((Version) o).getSelectedVersion());
     }
 }

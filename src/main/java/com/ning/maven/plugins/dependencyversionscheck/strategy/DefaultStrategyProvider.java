@@ -5,11 +5,11 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at:
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
- * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
  * License for the specific language governing permissions and limitations
  * under the License.
  */
@@ -47,7 +47,7 @@ public class DefaultStrategyProvider implements StrategyProvider
         if (resolvers == null) {
             Map newResolvers = new HashMap();
             if (!CollectionUtils.isEmpty(resolverDefinitions)) {
-                for (Iterator it = resolverDefinitions.iterator(); it.hasNext(); ) {
+                for (Iterator it = resolverDefinitions.iterator(); it.hasNext();) {
                     final Strategy resolver = (Strategy) it.next();
                     final String name = resolver.getName().toLowerCase(Locale.ENGLISH);
 

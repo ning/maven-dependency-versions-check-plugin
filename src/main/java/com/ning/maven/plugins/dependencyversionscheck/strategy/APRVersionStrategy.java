@@ -5,11 +5,11 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at:
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
- * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
  * License for the specific language governing permissions and limitations
  * under the License.
  */
@@ -45,8 +45,8 @@ public class APRVersionStrategy implements Strategy
     public final boolean isCompatible(final Version versionA, final Version versionB)
     {
         LOG.debug("Is {} compatible to {}... ", versionA, versionB);
-        final VersionElement [] versionAElements = versionA.getVersionElements();
-        final VersionElement [] versionBElements = versionB.getVersionElements();
+        final VersionElement[] versionAElements = versionA.getVersionElements();
+        final VersionElement[] versionBElements = versionB.getVersionElements();
 
         final AprVersion aprVersionA = getAprVersion(versionAElements);
         final AprVersion aprVersionB = getAprVersion(versionBElements);
@@ -81,7 +81,7 @@ public class APRVersionStrategy implements Strategy
         return res;
     }
 
-    private final AprVersion getAprVersion(final VersionElement [] versionElements)
+    private AprVersion getAprVersion(final VersionElement[] versionElements)
     {
         if (versionElements.length < 2) {
             return null;
@@ -89,8 +89,7 @@ public class APRVersionStrategy implements Strategy
 
         if (!(versionElements[0].isNumber()
               && versionElements[0].hasDot()
-              && versionElements[1].isNumber()))
-        {
+              && versionElements[1].isNumber())) {
             return null;
         }
 
@@ -108,7 +107,7 @@ public class APRVersionStrategy implements Strategy
         }
 
         StringBuffer qualifier = new StringBuffer();
-        while(!versionElements[qualifierStart++].hasEndOfVersion()) {
+        while (!versionElements[qualifierStart++].hasEndOfVersion()) {
             qualifier.append(versionElements[qualifierStart]);
         }
 
