@@ -292,6 +292,8 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
 
                 final ProjectBuildingRequest buildingRequest = new DefaultProjectBuildingRequest(session.getProjectBuildingRequest());
                 buildingRequest.setProject(project);
+                buildingRequest.setLocalRepository(localRepository);
+                buildingRequest.setRemoteRepositories(remoteRepositories);
                 final DependencyNode node = graphBuilder.buildDependencyGraph(buildingRequest, null);
 
                 for (final Iterator<DependencyNode> dependencyIt = node.getChildren().iterator(); dependencyIt.hasNext();) {
