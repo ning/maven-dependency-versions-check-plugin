@@ -19,6 +19,8 @@ package com.ning.maven.plugins.dependencyversionscheck.util;
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.artifact.resolver.filter.ArtifactFilter;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+
 /**
  * Filter a given artifact based on a list of scopes. Only allow
  * inclusion if the artifact is in one of the scopes.
@@ -27,6 +29,7 @@ public class ArtifactScopeFilter implements ArtifactFilter
 {
     final String [] scopes;
 
+    @SuppressFBWarnings("EI_EXPOSE_REP2")
     public ArtifactScopeFilter(final String [] scopes)
     {
         this.scopes = scopes;

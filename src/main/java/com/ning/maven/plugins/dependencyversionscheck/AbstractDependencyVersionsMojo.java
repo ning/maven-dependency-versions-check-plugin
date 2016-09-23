@@ -26,13 +26,11 @@ import java.util.Map;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
-import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
 import java.util.concurrent.locks.Lock;
 import java.util.regex.Pattern;
 
-import com.google.common.base.Throwables;
-import com.google.common.util.concurrent.*;
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.lang.ArrayUtils;
 import org.apache.commons.lang.StringUtils;
@@ -70,6 +68,12 @@ import org.apache.maven.shared.dependency.tree.DependencyTreeBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.common.base.Throwables;
+import com.google.common.util.concurrent.Futures;
+import com.google.common.util.concurrent.ListeningExecutorService;
+import com.google.common.util.concurrent.MoreExecutors;
+import com.google.common.util.concurrent.Striped;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.ning.maven.plugins.dependencyversionscheck.strategy.Strategy;
 import com.ning.maven.plugins.dependencyversionscheck.strategy.StrategyProvider;
 import com.ning.maven.plugins.dependencyversionscheck.util.ArtifactOptionalFilter;

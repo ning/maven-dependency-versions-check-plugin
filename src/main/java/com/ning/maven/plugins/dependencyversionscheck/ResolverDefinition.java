@@ -20,6 +20,8 @@ import org.apache.commons.lang.builder.EqualsBuilder;
 import org.apache.commons.lang.builder.HashCodeBuilder;
 import org.apache.commons.lang.builder.ToStringBuilder;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+
 /**
  * Represents a "resolver" element in the configuration section.
  */
@@ -40,6 +42,7 @@ public class ResolverDefinition
         this.strategyName = strategyName;
     }
 
+    @SuppressFBWarnings("EI_EXPOSE_REP2")
     public void setIncludes(String[] includes)
     {
         this.includes = includes;
@@ -55,6 +58,7 @@ public class ResolverDefinition
         return strategyName;
     }
 
+    @SuppressFBWarnings("EI_EXPOSE_REP")
     public String[] getIncludes()
     {
         return includes;
