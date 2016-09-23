@@ -26,13 +26,11 @@ import java.util.Map;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
-import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
 import java.util.concurrent.locks.Lock;
 import java.util.regex.Pattern;
 
-import com.google.common.base.Throwables;
-import com.google.common.util.concurrent.*;
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.lang.ArrayUtils;
 import org.apache.commons.lang.StringUtils;
@@ -55,21 +53,30 @@ import org.apache.maven.artifact.versioning.DefaultArtifactVersion;
 import org.apache.maven.artifact.versioning.InvalidVersionSpecificationException;
 import org.apache.maven.artifact.versioning.OverConstrainedVersionException;
 import org.apache.maven.artifact.versioning.VersionRange;
+import org.apache.maven.execution.MavenSession;
 import org.apache.maven.model.Dependency;
 import org.apache.maven.model.Exclusion;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
+import org.apache.maven.project.DefaultProjectBuildingRequest;
 import org.apache.maven.project.MavenProject;
 import org.apache.maven.project.MavenProjectBuilder;
 import org.apache.maven.project.ProjectBuildingException;
+import org.apache.maven.project.ProjectBuildingRequest;
 import org.apache.maven.project.artifact.InvalidDependencyVersionException;
 import org.apache.maven.project.artifact.MavenMetadataSource;
-import org.apache.maven.shared.dependency.tree.DependencyNode;
-import org.apache.maven.shared.dependency.tree.DependencyTreeBuilder;
+import org.apache.maven.shared.dependency.graph.DependencyGraphBuilder;
+import org.apache.maven.shared.dependency.graph.DependencyNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.common.base.Throwables;
+import com.google.common.util.concurrent.Futures;
+import com.google.common.util.concurrent.ListeningExecutorService;
+import com.google.common.util.concurrent.MoreExecutors;
+import com.google.common.util.concurrent.Striped;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.ning.maven.plugins.dependencyversionscheck.strategy.Strategy;
 import com.ning.maven.plugins.dependencyversionscheck.strategy.StrategyProvider;
 import com.ning.maven.plugins.dependencyversionscheck.util.ArtifactOptionalFilter;
@@ -92,6 +99,14 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
      * @readonly
     */
     protected MavenProject project;
+
+    /**
+     * The maven session.
+     * @parameter expression="${session}"
+     * @required
+     * @readonly
+    */
+    protected MavenSession session;
 
     /**
      * For creating MavenProject objects.
@@ -138,7 +153,7 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
      * @required
      * @readonly
      */
-    protected DependencyTreeBuilder treeBuilder;
+    protected DependencyGraphBuilder graphBuilder;
 
     /**
      * @component
@@ -175,7 +190,7 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
     protected boolean skip = false;
 
     /**
-     * Whether to warn if the resolved major version is higher then the expected one of the project or one of the depedencies.
+     * Whether to warn if the resolved major version is higher then the expected one of the project or one of the dependencies.
      * @parameter default-value="false"
      */
     protected boolean warnIfMajorVersionIsHigher;
@@ -217,13 +232,13 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
     protected String defaultStrategy = "default";
 
     /** Lists all available scopes for transitive dependency resolution. */
-    protected static final Map TRANSITIVE_SCOPES;
+    protected static final Map<String, String[]> TRANSITIVE_SCOPES;
 
     /** Lists all visible scopes when doing dependency resolution. */
-    protected static final Map VISIBLE_SCOPES;
+    protected static final Map<String, String[]> VISIBLE_SCOPES;
 
     static {
-        final Map transitiveScopes = new HashMap();
+        final Map<String, String[]> transitiveScopes = new HashMap<String, String[]>();
         // Map from the scope to test to the scopes that show up in this scope from a transitive dep. null value is for "all available scopes".
         transitiveScopes.put(Artifact.SCOPE_COMPILE, new String [] { Artifact.SCOPE_COMPILE, Artifact.SCOPE_SYSTEM });
         transitiveScopes.put(Artifact.SCOPE_TEST,    new String [] { Artifact.SCOPE_COMPILE, Artifact.SCOPE_SYSTEM, Artifact.SCOPE_RUNTIME });
@@ -232,7 +247,7 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
         TRANSITIVE_SCOPES = Collections.unmodifiableMap(transitiveScopes);
 
         // Map from the scope to the scopes that are visible on the classpath for that scope. null value is for "all available scopes".
-        final Map visibleScopes = new HashMap();
+        final Map<String, String[]> visibleScopes = new HashMap<String, String[]>();
         visibleScopes.put(Artifact.SCOPE_COMPILE, new String [] { Artifact.SCOPE_COMPILE,  Artifact.SCOPE_PROVIDED, Artifact.SCOPE_SYSTEM });
         visibleScopes.put(Artifact.SCOPE_TEST,    new String [] { Artifact.SCOPE_COMPILE,  Artifact.SCOPE_PROVIDED, Artifact.SCOPE_SYSTEM,                         Artifact.SCOPE_TEST });
         visibleScopes.put(Artifact.SCOPE_RUNTIME, new String [] { Artifact.SCOPE_COMPILE,                           Artifact.SCOPE_SYSTEM, Artifact.SCOPE_RUNTIME });
@@ -246,7 +261,7 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
     protected final Map resolverMap = new HashMap();
 
     /** Artifact pattern to VersionStrategy. Filled in loadResolvers(). */
-    protected final Map resolverPatternMap = new HashMap();
+    protected final Map<String, Strategy> resolverPatternMap = new HashMap<String, Strategy>();
 
     /** Qualified artifact name to artifact. */
     protected final Map resolvedDependenciesByName = new HashMap();
@@ -259,7 +274,7 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
     private final ListeningExecutorService executorService = MoreExecutors.listeningDecorator(Executors.newFixedThreadPool(DEPENDENCY_RESOLUTION_NUM_THREADS,
             new ThreadFactoryBuilder().setNameFormat("dependency-version-check-worker-%s").setDaemon(true).build()));
 
-    private final Striped resolutionMapLocks = Striped.lock(DEPENDENCY_RESOLUTION_NUM_THREADS);
+    private final Striped<Lock> resolutionMapLocks = Striped.lock(DEPENDENCY_RESOLUTION_NUM_THREADS);
 
     public void execute() throws MojoExecutionException, MojoFailureException
     {
@@ -272,11 +287,13 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
             else {
                 checkExceptions();
 
-                final DependencyNode node = treeBuilder.buildDependencyTree(project, localRepository, artifactFactory, artifactMetadataSource, null, artifactCollector);
+                final ProjectBuildingRequest buildingRequest = new DefaultProjectBuildingRequest(session.getProjectBuildingRequest());
+                buildingRequest.setProject(project);
+                final DependencyNode node = graphBuilder.buildDependencyGraph(buildingRequest, null);
 
-                for (final Iterator dependencyIt = node.iterator(); dependencyIt.hasNext(); ) {
-                    final DependencyNode dependency = (DependencyNode) dependencyIt.next();
-                    if (dependency.getState() == DependencyNode.INCLUDED) {
+                for (final Iterator<DependencyNode> dependencyIt = node.getChildren().iterator(); dependencyIt.hasNext(); ) {
+                    final DependencyNode dependency = dependencyIt.next();
+                    if ("included".equalsIgnoreCase(dependency.getPremanagedScope())) {
                         final Artifact artifact = dependency.getArtifact();
                         resolvedDependenciesByName.put(getQualifiedName(artifact), artifact);
                     }
