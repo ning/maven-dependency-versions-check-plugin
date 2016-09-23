@@ -20,6 +20,8 @@ import org.apache.commons.lang.StringUtils;
 import org.apache.commons.lang.builder.EqualsBuilder;
 import org.apache.commons.lang.builder.HashCodeBuilder;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+
 /**
  * Represents an artifact version.
  */
@@ -154,11 +156,13 @@ public final class Version implements Comparable
         this.elementCount = resultPos;
     }
 
+    @SuppressFBWarnings("EI_EXPOSE_REP")
     public String[] getRawElements()
     {
         return rawElements;
     }
 
+    @SuppressFBWarnings("EI_EXPOSE_REP")
     public VersionElement[] getVersionElements()
     {
         return versionElements;

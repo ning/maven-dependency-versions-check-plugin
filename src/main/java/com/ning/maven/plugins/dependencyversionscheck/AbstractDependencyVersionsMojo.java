@@ -39,7 +39,6 @@ import org.apache.maven.artifact.factory.ArtifactFactory;
 import org.apache.maven.artifact.metadata.ArtifactMetadataSource;
 import org.apache.maven.artifact.repository.ArtifactRepository;
 import org.apache.maven.artifact.resolver.AbstractArtifactResolutionException;
-import org.apache.maven.artifact.resolver.ArtifactCollector;
 import org.apache.maven.artifact.resolver.ArtifactNotFoundException;
 import org.apache.maven.artifact.resolver.ArtifactResolutionException;
 import org.apache.maven.artifact.resolver.ArtifactResolutionResult;
@@ -154,13 +153,6 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
      * @readonly
      */
     protected DependencyGraphBuilder graphBuilder;
-
-    /**
-     * @component
-     * @required
-     * @readonly
-     */
-    protected ArtifactCollector artifactCollector;
 
     /**
      * Remote repositories.
