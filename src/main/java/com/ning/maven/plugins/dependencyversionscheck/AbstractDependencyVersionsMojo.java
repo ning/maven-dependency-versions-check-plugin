@@ -3,13 +3,13 @@
  *
  * Ning licenses this file to you under the Apache License, version 2.0
  * (the "License"); you may not use this file except in compliance with the
- * License.  You may obtain a copy of the License at:
+ * License. You may obtain a copy of the License at:
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
- * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
  * License for the specific language governing permissions and limitations
  * under the License.
  */
@@ -91,26 +91,30 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
 
     /**
      * The maven project (effective pom).
+     *
      * @parameter expression="${project}"
      * @required
      * @readonly
-    */
+     */
     protected MavenProject project;
 
     /**
      * For creating MavenProject objects.
+     *
      * @component
      */
     protected MavenProjectBuilder mavenProjectBuilder;
 
     /**
      * The artifact factory.
+     *
      * @component
      */
     protected ArtifactFactory artifactFactory;
 
     /**
      * Resolves artifacts.
+     *
      * @component
      */
     protected ArtifactResolver artifactResolver;
@@ -125,12 +129,14 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
 
     /**
      * For resolving versions.
+     *
      * @component
      */
     protected ArtifactMetadataSource artifactMetadataSource;
 
     /**
      * The local repo for the project if defined;
+     *
      * @parameter expression="${localRepository}"
      * @required
      * @readonly
@@ -153,6 +159,7 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
 
     /**
      * Remote repositories.
+     *
      * @parameter expression="${project.remoteArtifactRepositories}"
      * @required
      * @readonly
@@ -161,6 +168,7 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
 
     /**
      * A set of artifacts with expected and resolved versions that are to be except from the check.
+     *
      * @parameter alias="exceptions"
      */
     protected VersionCheckExcludes[] exceptions;
@@ -179,15 +187,17 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
     protected boolean skip = false;
 
     /**
-     * Whether to warn if the resolved major version is higher then the expected one of the project or one of the depedencies.
+     * Whether to warn if the resolved major version is higher then the expected one of the project or one of the dependencies.
+     *
      * @parameter default-value="false"
      */
     protected boolean warnIfMajorVersionIsHigher;
 
     /**
      * Whether to run dependency resolution in parallel.
+     *
      * @parameter expression="useParallelDependencyResolution"
-     * default-value="true"
+     *            default-value="true"
      *
      */
     protected boolean useParallelDependencyResolution;
@@ -210,7 +220,7 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
      *
      * @parameter alias="resolvers"
      */
-    protected ResolverDefinition [] resolvers;
+    protected ResolverDefinition[] resolvers;
 
     /**
      * Sets the default strategy.
@@ -229,10 +239,10 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
     static {
         final Map transitiveScopes = new HashMap();
         // Map from the scope to test to the scopes that show up in this scope from a transitive dep. null value is for "all available scopes".
-        transitiveScopes.put(Artifact.SCOPE_COMPILE, new String [] { Artifact.SCOPE_COMPILE, Artifact.SCOPE_SYSTEM });
-        transitiveScopes.put(Artifact.SCOPE_TEST,    new String [] { Artifact.SCOPE_COMPILE, Artifact.SCOPE_SYSTEM, Artifact.SCOPE_RUNTIME });
-        transitiveScopes.put(Artifact.SCOPE_RUNTIME, new String [] { Artifact.SCOPE_COMPILE, Artifact.SCOPE_SYSTEM, Artifact.SCOPE_RUNTIME });
-        transitiveScopes.put(null ,                  new String [] { Artifact.SCOPE_COMPILE, Artifact.SCOPE_SYSTEM, Artifact.SCOPE_RUNTIME });
+        transitiveScopes.put(Artifact.SCOPE_COMPILE, new String[] {Artifact.SCOPE_COMPILE, Artifact.SCOPE_SYSTEM});
+        transitiveScopes.put(Artifact.SCOPE_TEST, new String[] {Artifact.SCOPE_COMPILE, Artifact.SCOPE_SYSTEM, Artifact.SCOPE_RUNTIME});
+        transitiveScopes.put(Artifact.SCOPE_RUNTIME, new String[] {Artifact.SCOPE_COMPILE, Artifact.SCOPE_SYSTEM, Artifact.SCOPE_RUNTIME});
+        transitiveScopes.put(null, new String[] {Artifact.SCOPE_COMPILE, Artifact.SCOPE_SYSTEM, Artifact.SCOPE_RUNTIME});
         TRANSITIVE_SCOPES = Collections.unmodifiableMap(transitiveScopes);
 
         // Map from the scope to the scopes that are visible on the classpath for that scope. null value is for "all available scopes".
@@ -261,7 +271,7 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
     protected int maxLen = -1;
 
     private final ListeningExecutorService executorService = MoreExecutors.listeningDecorator(Executors.newFixedThreadPool(DEPENDENCY_RESOLUTION_NUM_THREADS,
-            new ThreadFactoryBuilder().setNameFormat("dependency-version-check-worker-%s").setDaemon(true).build()));
+        new ThreadFactoryBuilder().setNameFormat("dependency-version-check-worker-%s").setDaemon(true).build()));
 
     private final Striped resolutionMapLocks = Striped.lock(DEPENDENCY_RESOLUTION_NUM_THREADS);
 
@@ -321,7 +331,7 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
     /**
      * Loads all resolver definitions and turns them into either direct resolved strategies or patterns to check against.
      */
-    private void loadResolvers(final ResolverDefinition [] resolvers)
+    private void loadResolvers(final ResolverDefinition[] resolvers)
     {
         if (!ArrayUtils.isEmpty(resolvers)) {
             for (int i = 0; i < resolvers.length; i++) {
@@ -332,7 +342,7 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
                     LOG.warn("Could not locate Strategy {}! Check for typos!", r.getStrategyName());
                 }
                 else {
-                    final String [] includes = r.getIncludes();
+                    final String[] includes = r.getIncludes();
                     if (!ArrayUtils.isEmpty(includes)) {
                         for (int j = 0; j < includes.length; j++) {
                             final Strategy oldStrategy = (Strategy) resolverMap.get(includes[j]);
@@ -370,7 +380,7 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
         }
 
         // No direct hit. Try just the group
-        final String [] elements = StringUtils.split(dependencyName, ":");
+        final String[] elements = StringUtils.split(dependencyName, ":");
 
         if (elements.length == 2) {
             strategy = (Strategy) resolverMap.get(elements[0]);
@@ -383,16 +393,16 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
             }
 
             // Try the wildcards
-            for (Iterator it = resolverPatternMap.entrySet().iterator(); it.hasNext(); ) {
+            for (Iterator it = resolverPatternMap.entrySet().iterator(); it.hasNext();) {
                 final Map.Entry entry = (Map.Entry) it.next();
                 final String pattern = (String) entry.getKey();
-                final String patternElements [] = StringUtils.split(pattern, ":");
+                final String patternElements[] = StringUtils.split(pattern, ":");
 
                 if (Pattern.matches(patternElements[0], elements[0])) {
                     // group wildcard match.
                     if (patternElements.length == 1) {
                         strategy = (Strategy) entry.getValue();
-                        LOG.debug("Found pattern match ({}) on group ({}) match: {}", new Object [] {patternElements[0], elements[0], strategy.getName() });
+                        LOG.debug("Found pattern match ({}) on group ({}) match: {}", new Object[] {patternElements[0], elements[0], strategy.getName()});
 
                         resolverMap.put(dependencyName, strategy);
                         return strategy;
@@ -400,7 +410,7 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
                     // group and artifact wildcard match.
                     else if (Pattern.matches(patternElements[1], elements[1])) {
                         strategy = (Strategy) entry.getValue();
-                        LOG.debug("Found regexp match ({}) on ({}) match: {}", new Object [] {pattern, dependencyName, strategy.getName() });
+                        LOG.debug("Found regexp match ({}) on ({}) match: {}", new Object[] {pattern, dependencyName, strategy.getName()});
 
                         resolverMap.put(dependencyName, strategy);
                         return strategy;
@@ -416,15 +426,17 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
     }
 
     /**
-     * Creates a map of all version resolutions used in this project in a given scope. The result is a map from artifactName to a list of version numbers used in the project, based on the element requesting
+     * Creates a map of all version resolutions used in this project in a given scope. The result is a map from artifactName to a list of version numbers used in the project, based on the element
+     * requesting
      * the version.
      *
      * If the special scope "null" is used, a superset of all scopes is used (this is used by the check mojo).
      */
-    protected Map buildResolutionMap(final String scope) throws MojoExecutionException, InvalidDependencyVersionException, ProjectBuildingException, ArtifactResolutionException, ArtifactNotFoundException
+    protected Map buildResolutionMap(final String scope)
+        throws MojoExecutionException, InvalidDependencyVersionException, ProjectBuildingException, ArtifactResolutionException, ArtifactNotFoundException
     {
-        final String [] visibleScopes = (String []) VISIBLE_SCOPES.get(scope);
-        final String [] transitiveScopes = (String []) TRANSITIVE_SCOPES.get(scope);
+        final String[] visibleScopes = (String[]) VISIBLE_SCOPES.get(scope);
+        final String[] transitiveScopes = (String[]) TRANSITIVE_SCOPES.get(scope);
 
         if (visibleScopes == null) {
             throw new MojoExecutionException("No valid scopes found for '" + scope + "'");
@@ -440,7 +452,8 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
 
             if (useParallelDependencyResolution) {
                 futures.add(executorService.submit(new Runnable() {
-                    public void run() {
+                    public void run()
+                    {
                         try {
                             updateResolutionMapForDep(visibleScopes, transitiveScopes, resolutionMap, dependency);
                         }
@@ -449,7 +462,8 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
                         }
                     }
                 }));
-            } else {
+            }
+            else {
                 updateResolutionMapForDep(visibleScopes, transitiveScopes, resolutionMap, dependency);
             }
         }
@@ -468,7 +482,8 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
         return resolutionMap;
     }
 
-    private void updateResolutionMapForDep(String[] visibleScopes, String[] transitiveScopes, SortedMap resolutionMap, Dependency dependency) throws InvalidDependencyVersionException, ProjectBuildingException, ArtifactResolutionException, ArtifactNotFoundException
+    private void updateResolutionMapForDep(String[] visibleScopes, String[] transitiveScopes, SortedMap resolutionMap, Dependency dependency)
+        throws InvalidDependencyVersionException, ProjectBuildingException, ArtifactResolutionException, ArtifactNotFoundException
     {
         LOG.debug("Checking direct dependency {}...", dependency);
         if (!isVisible(dependency.getScope(), visibleScopes)) {
@@ -516,8 +531,7 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
 
                 if (transitiveDependencies != null) {
                     LOG.debug("Artifact {} contributes {}", artifactName, transitiveDependencies);
-                    for (Iterator transitiveIt = transitiveDependencies.iterator(); transitiveIt.hasNext(); )
-                    {
+                    for (Iterator transitiveIt = transitiveDependencies.iterator(); transitiveIt.hasNext();) {
                         final VersionResolution versionResolution = (VersionResolution) transitiveIt.next();
                         addToResolutionMap(resolutionMap, versionResolution);
                     }
@@ -529,7 +543,7 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
     /**
      * Returns true if a given scope is available in the list of scopes.
      */
-    private boolean isVisible(final String scope, final String [] validScopes)
+    private boolean isVisible(final String scope, final String[] validScopes)
     {
         for (int i = 0; i < validScopes.length; i++) {
             if (scope.equals(validScopes[i])) {
@@ -554,18 +568,19 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
                 resolutionMap.put(resolution.getDependencyName(), resolutions);
             }
 
-            for (Iterator it = resolutions.iterator(); it.hasNext(); ) {
+            for (Iterator it = resolutions.iterator(); it.hasNext();) {
                 final VersionResolution existingResolution = (VersionResolution) it.next();
                 // TODO: It might be reasonable to fail the build in this case. However, I have yet to see
                 // this message... :-)
                 if (!existingResolution.getActualVersion().equals(resolution.getActualVersion())) {
                     LOG.warn("Dependency '{} expects version '{}' but '{}' already resolved to '{}'!",
-                            new Object[]{resolution.getDependencyName(), resolution.getActualVersion(), existingResolution.getDependencyName(), existingResolution.getActualVersion()});
+                        new Object[] {resolution.getDependencyName(), resolution.getActualVersion(), existingResolution.getDependencyName(), existingResolution.getActualVersion()});
                 }
             }
             LOG.debug("Adding resolution: {}", resolution);
             resolutions.add(resolution);
-        } finally {
+        }
+        finally {
             lock.unlock();
         }
     }
@@ -596,14 +611,15 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
                     expectedVersion = resolvedVersion;
                 }
                 else {
-                    LOG.error("Cannot determine the recommended version of dependency '{}'; its version specification is '{}', and the resolved version is '{}'.", new Object [] { artifactName, dependency.getVersion(), resolvedVersion.toString() });
+                    LOG.error("Cannot determine the recommended version of dependency '{}'; its version specification is '{}', and the resolved version is '{}'.",
+                        new Object[] {artifactName, dependency.getVersion(), resolvedVersion.toString()});
                     return null;
                 }
             }
 
             // Build internal versions
             final Version resolvedVersionObj = new Version(resolvedVersion.toString());
-            final Version depVersionObj      = new Version(versionRange.toString(), expectedVersion.toString());
+            final Version depVersionObj = new Version(versionRange.toString(), expectedVersion.toString());
 
             resolution = new VersionResolution(artifactName, artifactName, depVersionObj, resolvedVersionObj, directArtifact);
 
@@ -637,7 +653,7 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
             final List exclusions = new ArrayList();
             for (Iterator j = dependency.getExclusions().iterator(); j.hasNext();) {
                 final Exclusion e = (Exclusion) j.next();
-                exclusions.add( e.getGroupId() + ":" + e.getArtifactId() );
+                exclusions.add(e.getGroupId() + ":" + e.getArtifactId());
             }
 
             exclusionFilter = new ExcludesArtifactFilter(exclusions);
@@ -670,7 +686,7 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
         final List resolutions = new ArrayList();
 
         for (Iterator dependenciesToCheckIter = dependenciesToCheck.iterator(); dependenciesToCheckIter.hasNext();) {
-            Artifact dependencyArtifactToCheck = (Artifact)dependenciesToCheckIter.next();
+            Artifact dependencyArtifactToCheck = (Artifact) dependenciesToCheckIter.next();
             LOG.debug("Checking {}...", dependencyArtifactToCheck);
             if (!scopeFilter.include(dependencyArtifactToCheck)) {
                 LOG.debug("... in invisible scope, ignoring!");
@@ -695,13 +711,13 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
             Artifact resolvedDependency = (Artifact) resolvedDependenciesByName.get(artifactToCheckName);
 
             if (resolvedDependency == null) {
-                LOG.debug("Dependency {}:{} of artifact {} is no longer used in the current project.", new Object [] { artifactToCheckName, dependencyArtifactToCheck.getVersion(), artifactName });
+                LOG.debug("Dependency {}:{} of artifact {} is no longer used in the current project.", new Object[] {artifactToCheckName, dependencyArtifactToCheck.getVersion(), artifactName});
             }
             else {
                 // if the artifact in question is excluded in the current pom, then we don't have to worry about it anyways
                 // this should be in the resolver. CHECKME! if (!exclusions.contains(dependencyArtifactToCheck.getGroupId() + ":" + dependencyArtifactToCheck.getArtifactId())) {
                 final Version resolvedVersion = getVersion(resolvedDependency);
-                final Version versionToCheck  = getVersion(dependencyArtifactToCheck);
+                final Version versionToCheck = getVersion(dependencyArtifactToCheck);
 
                 final VersionResolution resolution = new VersionResolution(artifactName, artifactToCheckName, versionToCheck, resolvedVersion, false);
 
@@ -710,7 +726,7 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
                 // we have an error if
                 // - if resolved dependency has a lower version or different qualifier than the stated one of the current transitive dependency
                 // - if resolver dependency has a higher major version than the stated one of the current transitive dependency and
-                //   there is no explicit dependency to that major version in the current project
+                // there is no explicit dependency to that major version in the current project
                 // for this last check, we assume that explicit dependencies have already been checked against actual ones, so we only need to check
                 // if the artifact is an explicit dependency
 
@@ -721,7 +737,8 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
                     }
                 }
                 else if (warnIfMajorVersionIsHigher && !strategy.isCompatible(resolvedVersion, versionToCheck)) {
-                    LOG.warn("Artifact {} depends on {} at an incompatible version ({}) than the current project ({})!", new Object [] { artifactName, artifactToCheckName, dependencyArtifactToCheck.getVersion(), resolvedDependency.getVersion() });
+                    LOG.warn("Artifact {} depends on {} at an incompatible version ({}) than the current project ({})!",
+                        new Object[] {artifactName, artifactToCheckName, dependencyArtifactToCheck.getVersion(), resolvedDependency.getVersion()});
                 }
             }
         }
@@ -769,21 +786,22 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
      * than the artifactResolver. However, due to MNG-3236 the artifact filter is not applied when resolving dependencies and this method relies on the artifact filter to get
      * the scoping right. Well, maybe in maven 3.0 this will be better. Or different. Whatever comes first.
      */
-    private Set resolveDependenciesInItsOwnScope(final MavenProject project, final ArtifactFilter filter, final boolean includeOptional) throws InvalidDependencyVersionException, ArtifactResolutionException, ArtifactNotFoundException
+    private Set resolveDependenciesInItsOwnScope(final MavenProject project, final ArtifactFilter filter, final boolean includeOptional)
+        throws InvalidDependencyVersionException, ArtifactResolutionException, ArtifactNotFoundException
     {
         Set dependencyArtifacts = MavenMetadataSource.createArtifacts(artifactFactory,
-                                                                      project.getDependencies(),
-                                                                      null,
-                                                                      filter,
-                                                                      null);
+            project.getDependencies(),
+            null,
+            filter,
+            null);
 
         ArtifactResolutionResult result = artifactResolver.resolveTransitively(dependencyArtifacts,
-                                                                               project.getArtifact(),
-                                                                               Collections.EMPTY_MAP,
-                                                                               localRepository,
-                                                                               remoteRepositories,
-                                                                               artifactMetadataSource,
-                                                                               new ArtifactOptionalFilter(includeOptional));
+            project.getArtifact(),
+            Collections.EMPTY_MAP,
+            localRepository,
+            remoteRepositories,
+            artifactMetadataSource,
+            new ArtifactOptionalFilter(includeOptional));
 
         return result.getArtifacts();
     }
@@ -795,13 +813,14 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
      * than the artifactResolver. However, due to MNG-3236 the artifact filter is not applied when resolving dependencies and this method relies on the artifact filter to get
      * the scoping right. Well, maybe in maven 3.0 this will be better. Or different. Whatever comes first.
      */
-    private Set resolveDependenciesInItsOwnScope(final Artifact artifact, final ArtifactFilter filter) throws InvalidDependencyVersionException, ArtifactResolutionException, ArtifactNotFoundException, ProjectBuildingException
+    private Set resolveDependenciesInItsOwnScope(final Artifact artifact, final ArtifactFilter filter)
+        throws InvalidDependencyVersionException, ArtifactResolutionException, ArtifactNotFoundException, ProjectBuildingException
     {
-        MavenProject projectForArtifact = mavenProjectBuilder.buildFromRepository(artifact, remoteRepositories,localRepository);
+        MavenProject projectForArtifact = mavenProjectBuilder.buildFromRepository(artifact, remoteRepositories, localRepository);
 
         // "false" == do not include any optional dependencies from here. As these dependencies are off an artifact that is already a dependency, this
-        //            needs to ignore all optional deps. This avoids downloading poms that might not even exist and should not be part of the dependency
-        //            resolution of the main project.
+        // needs to ignore all optional deps. This avoids downloading poms that might not even exist and should not be part of the dependency
+        // resolution of the main project.
         return resolveDependenciesInItsOwnScope(projectForArtifact, filter, false);
     }
 
@@ -831,10 +850,10 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
         String result = artifact.getGroupId() + ":" + artifact.getArtifactId();
 
         if ((artifact.getType() != null) && !"jar".equals(artifact.getType())) {
-            result = result +  ":" + artifact.getType();
+            result = result + ":" + artifact.getType();
         }
         if ((artifact.getClassifier() != null) && (!"tests".equals(artifact.getClassifier()) || !"test-jar".equals(artifact.getType()))) {
-            result = result +  ":" + artifact.getClassifier();
+            result = result + ":" + artifact.getClassifier();
         }
         return result;
     }
@@ -844,13 +863,13 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
      */
     private String getQualifiedName(Dependency dependency)
     {
-        String result = dependency.getGroupId() + ":" + dependency.getArtifactId() ;
+        String result = dependency.getGroupId() + ":" + dependency.getArtifactId();
 
         if ((dependency.getType() != null) && !"jar".equals(dependency.getType())) {
-            result = result +  ":" + dependency.getType();
+            result = result + ":" + dependency.getType();
         }
         if ((dependency.getClassifier() != null) && (!"tests".equals(dependency.getClassifier()) || !"test-jar".equals(dependency.getType()))) {
-            result = result +  ":" + dependency.getClassifier();
+            result = result + ":" + dependency.getClassifier();
         }
         return result;
     }
@@ -861,11 +880,11 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
     private void logArtifactResolutionException(AbstractArtifactResolutionException ex)
     {
         if (ex instanceof MultipleArtifactsNotFoundException) {
-            MultipleArtifactsNotFoundException multiEx = (MultipleArtifactsNotFoundException)ex;
-            StringBuilder                      builder = new StringBuilder();
+            MultipleArtifactsNotFoundException multiEx = (MultipleArtifactsNotFoundException) ex;
+            StringBuilder builder = new StringBuilder();
 
             for (Iterator iter = multiEx.getMissingArtifacts().iterator(); iter.hasNext();) {
-                Artifact artifact = (Artifact)iter.next();
+                Artifact artifact = (Artifact) iter.next();
                 builder.append(getQualifiedName(artifact));
 
                 if (iter.hasNext()) {

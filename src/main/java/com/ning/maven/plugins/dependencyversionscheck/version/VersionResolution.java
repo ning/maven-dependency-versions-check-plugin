@@ -3,13 +3,13 @@
  *
  * Ning licenses this file to you under the Apache License, version 2.0
  * (the "License"); you may not use this file except in compliance with the
- * License.  You may obtain a copy of the License at:
+ * License. You may obtain a copy of the License at:
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
- * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
  * License for the specific language governing permissions and limitations
  * under the License.
  */
@@ -22,19 +22,19 @@ import org.apache.commons.lang.builder.ToStringBuilder;
 
 public class VersionResolution
 {
-    private final String  dependentName;
-    private final String  dependencyName;
+    private final String dependentName;
+    private final String dependencyName;
     private final Version expectedVersion;
     private final Version actualVersion;
     private final boolean directDependency;
 
     private boolean conflict = false;
 
-    public VersionResolution(final String dependentName, 
-                             final String dependencyName, 
-                             final Version expectedVersion, 
-                             final Version actualVersion, 
-                             final boolean directDependency)
+    public VersionResolution(final String dependentName,
+        final String dependencyName,
+        final Version expectedVersion,
+        final Version actualVersion,
+        final boolean directDependency)
     {
         this.dependentName = dependentName;
         this.dependencyName = dependencyName;
@@ -85,8 +85,14 @@ public class VersionResolution
 
     public boolean equals(final Object other)
     {
-        if (!(other instanceof VersionResolution))
+        if (other == null || other.getClass() != this.getClass()) {
             return false;
+        }
+
+        if (other == this) {
+            return true;
+        }
+
         VersionResolution castOther = (VersionResolution) other;
         return new EqualsBuilder().append(dependentName, castOther.dependentName)
             .append(dependencyName, castOther.dependencyName)
@@ -103,7 +109,12 @@ public class VersionResolution
 
     public String toString()
     {
-        return new ToStringBuilder(this).append("dependentName", dependentName).append("dependencyName", dependencyName).append("expectedVersion", expectedVersion).append("actualVersion", actualVersion).append("isConflict", conflict).toString();
+        return new ToStringBuilder(this).append("dependentName", dependentName)
+            .append("dependencyName", dependencyName)
+            .append("expectedVersion", expectedVersion)
+            .append("actualVersion", actualVersion)
+            .append("isConflict", conflict)
+            .toString();
     }
 
 

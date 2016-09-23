@@ -5,11 +5,11 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at:
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
- * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
  * License for the specific language governing permissions and limitations
  * under the License.
  */
@@ -20,7 +20,7 @@ import org.apache.commons.lang.builder.EqualsBuilder;
 import org.apache.commons.lang.builder.HashCodeBuilder;
 
 /**
- * Represents a single element of a version number. 
+ * Represents a single element of a version number.
  */
 public final class VersionElement
 {
@@ -92,7 +92,7 @@ public final class VersionElement
     public long getNumber()
     {
         if (!hasNumbers()) {
-            return 0l;
+            return 0L;
         }
         else {
 
@@ -102,7 +102,7 @@ public final class VersionElement
             }
             else {
                 final StringBuilder sb = new StringBuilder();
-                for (int i = 0 ; i < element.length(); i++) {
+                for (int i = 0; i < element.length(); i++) {
                     if (Character.isDigit(element.charAt(i))) {
                         sb.append(element.charAt(i));
                     }
@@ -126,8 +126,14 @@ public final class VersionElement
 
     public boolean equals(final Object other)
     {
-        if (!(other instanceof VersionElement))
+        if (other == null || other.getClass() != this.getClass()) {
             return false;
+        }
+
+        if (other == this) {
+            return true;
+        }
+
         VersionElement castOther = (VersionElement) other;
         return new EqualsBuilder().append(element, castOther.element).append(flags, castOther.flags).append(divider, castOther.divider).append(dividerChar, castOther.dividerChar).isEquals();
     }
