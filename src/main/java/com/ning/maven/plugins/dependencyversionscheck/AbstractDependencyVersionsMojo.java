@@ -58,6 +58,8 @@ import org.apache.maven.model.Exclusion;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
+import org.apache.maven.plugins.annotations.Component;
+import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.project.DefaultProjectBuildingRequest;
 import org.apache.maven.project.MavenProject;
 import org.apache.maven.project.MavenProjectBuilder;
@@ -93,145 +95,96 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
 
     /**
      * The maven project (effective pom).
-     *
-     * @parameter expression="${project}"
-     * @required
-     * @readonly
      */
+    @Parameter(defaultValue = "${project}", readonly = true)
     protected MavenProject project;
 
     /**
      * The maven session.
-     *
-     * @parameter expression="${session}"
-     * @required
-     * @readonly
      */
+    @Parameter(defaultValue = "${session}", readonly = true)
     protected MavenSession session;
 
     /**
      * For creating MavenProject objects.
-     *
-     * @component
      */
+    @Component
     protected MavenProjectBuilder mavenProjectBuilder;
 
     /**
      * The artifact factory.
-     *
-     * @component
      */
+    @Component
     protected ArtifactFactory artifactFactory;
 
     /**
      * Resolves artifacts.
-     *
-     * @component
      */
+    @Component
     protected ArtifactResolver artifactResolver;
 
     /**
      * The strategy provider. This can be requested by other pieces to add
      * additional strategies.
-     *
-     * @component
      */
+    @Component
     protected StrategyProvider strategyProvider;
 
     /**
      * For resolving versions.
-     *
-     * @component
      */
+    @Component
     protected ArtifactMetadataSource artifactMetadataSource;
 
     /**
      * The local repo for the project if defined;
-     *
-     * @parameter expression="${localRepository}"
-     * @required
-     * @readonly
      */
+    @Parameter(defaultValue = "${localRepository}", readonly = true)
     protected ArtifactRepository localRepository;
 
-    /**
-     * @component
-     * @required
-     * @readonly
-     */
+    @Component
     protected DependencyGraphBuilder graphBuilder;
 
     /**
      * Remote repositories.
-     *
-     * @parameter expression="${project.remoteArtifactRepositories}"
-     * @required
-     * @readonly
      */
+    @Parameter(defaultValue = "${project.remoteArtifactRepositories}", readonly = true)
     protected List remoteRepositories;
 
     /**
      * A set of artifacts with expected and resolved versions that are to be except from the check.
-     *
-     * @parameter alias="exceptions"
      */
+    @Parameter(alias = "exceptions")
     protected VersionCheckExcludes[] exceptions;
 
     /**
      * Skip the plugin execution.
-     *
-     * <pre>
-     *   <configuration>
-     *     <skip>true</skip>
-     *   </configuration>
-     * </pre>
-     *
-     * @parameter default-value="false"
      */
+    @Parameter(defaultValue = "false", property = "dependency-versions.skip")
     protected boolean skip = false;
 
     /**
      * Whether to warn if the resolved major version is higher then the expected one of the project or one of the dependencies.
-     *
-     * @parameter default-value="false"
      */
+    @Parameter(defaultValue = "false", property = "dependency-versions.warnIfMajorVersionIsHigher")
     protected boolean warnIfMajorVersionIsHigher;
 
     /**
      * Whether to run dependency resolution in parallel.
-     *
-     * @parameter expression="useParallelDependencyResolution"
-     *            default-value="true"
-     *
      */
-    protected boolean useParallelDependencyResolution;
+    @Parameter(defaultValue = "true", property = "dependency-versions.useParallelDependencyResolution")
+    protected boolean useParallelDependencyResolution = true;
 
     /**
      * Resolvers to resolve versions and compare existing things.
-     *
-     * <pre>
-     *   <resolvers>
-     *     <resolver>
-     *       <id>apache-stuff</id>
-     *       <strategy>APR</strategy>
-     *       <includes>
-     *         <include>commons-configuration:commons-configuration</include>
-     *         <include>commons-lang:commons-lang</include>
-     *       </includes>
-     *     </resolver>
-     *   </resolver>
-     * </pre>
-     *
-     * @parameter alias="resolvers"
      */
+    @Parameter(alias = "resolvers")
     protected ResolverDefinition[] resolvers;
 
     /**
      * Sets the default strategy.
-     *
-     * @parameter alias="defaultStrategy" default-value="default"
-     *
      */
+    @Parameter(alias = "defaultStrategy", defaultValue = "default")
     protected String defaultStrategy = "default";
 
     /** Lists all available scopes for transitive dependency resolution. */

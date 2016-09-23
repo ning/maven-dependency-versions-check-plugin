@@ -27,25 +27,24 @@ import java.util.TreeSet;
 
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.maven.plugin.MojoFailureException;
+import org.apache.maven.plugins.annotations.LifecyclePhase;
+import org.apache.maven.plugins.annotations.Mojo;
+import org.apache.maven.plugins.annotations.Parameter;
+import org.apache.maven.plugins.annotations.ResolutionScope;
 
 import com.ning.maven.plugins.dependencyversionscheck.version.Version;
 import com.ning.maven.plugins.dependencyversionscheck.version.VersionResolution;
 
 /**
  * Checks dependency versions.
- *
- * @goal check
- * @phase verify
- * @requiresDependencyResolution test
- * @see <a href="http://docs.codehaus.org/display/MAVENUSER/Mojo+Developer+Cookbook">Mojo Developer Cookbook</a>
  */
+@Mojo(name = "check", requiresProject = true, threadSafe = true, defaultPhase = LifecyclePhase.VERIFY, requiresDependencyResolution = ResolutionScope.TEST)
 public class DependencyVersionsCheckMojo extends AbstractDependencyVersionsMojo
 {
     /**
      * Whether the mojo should fail the build if a conflict was found.
-     *
-     * @parameter default-value="false"
      */
+    @Parameter(property="dependency-versions.failBuildInCaseOfConflict", defaultValue="false")
     protected boolean failBuildInCaseOfConflict;
 
 

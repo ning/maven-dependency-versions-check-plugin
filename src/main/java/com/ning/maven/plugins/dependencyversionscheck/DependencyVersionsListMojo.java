@@ -25,37 +25,36 @@ import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.lang.StringUtils;
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.plugin.MojoExecutionException;
+import org.apache.maven.plugins.annotations.Mojo;
+import org.apache.maven.plugins.annotations.Parameter;
+import org.apache.maven.plugins.annotations.ResolutionScope;
 
 import com.ning.maven.plugins.dependencyversionscheck.version.VersionResolution;
 
 /**
  * Lists dependency versions in different scopes.
  *
- * @goal list
- * @requiresDependencyResolution test
  * @since 2.0.0
  */
+@Mojo(name = "list", requiresProject = true, threadSafe = true, requiresDependencyResolution = ResolutionScope.TEST)
 public class DependencyVersionsListMojo extends AbstractDependencyVersionsMojo
 {
     /**
      * The scope to list. Defaults to "compile". Valid values are "compile", "test" and "runtime".
-     *
-     * @parameter expression="${scope}" default-value="compile"
      */
+    @Parameter(property="dependency-versions.scope", defaultValue="compile")
     protected String scope = "compile";
 
     /**
      * Whether to list only direct dependencies or all dependencies. Default is to list all dependencies.
-     *
-     * @parameter expression="${directOnly}" default-value="false"
      */
+    @Parameter(property="dependency-versions.directOnly", defaultValue="false")
     protected boolean directOnly = false;
 
     /**
      * Whether to list all dependencies or only dependencies in conflict. Default is to list all dependencies.
-     *
-     * @parameter expression="${conflictsOnly}" default-value="false"
      */
+    @Parameter(property="dependency-versions.conflictsOnly", defaultValue="false")
     protected boolean conflictsOnly = false;
 
     protected void doExecute() throws Exception
