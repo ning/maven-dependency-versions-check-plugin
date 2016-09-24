@@ -25,7 +25,7 @@
         </provides>
         <configuration>
             <!-- Location of a JDK6 in the Travis build environment -->
-            <jdkHome>/usr/lib/jvm/java-6-openjdk</jdkHome>
+            <jdkHome>/usr/lib/jvm/java-6-openjdk-amd64</jdkHome>
         </configuration>
     </toolchain>
 </toolchains>
