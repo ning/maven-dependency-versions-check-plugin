@@ -273,4 +273,19 @@
       </plugin>
     </plugins>
   </build>
+
+  <profiles>
+    <profile>
+      <id>travis</id>
+      <activation>
+        <property>
+          <name>env.TRAVIS</name>
+        </property>
+      </activation>
+      <properties>
+        <!-- Travis does not yet support Maven 3.3.x -->
+        <basepom.maven.version>3.2.5</basepom.maven.version>
+      </properties>
+    </profile>
+  </profiles>
 </project>
