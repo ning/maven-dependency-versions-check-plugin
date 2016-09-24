@@ -2,7 +2,7 @@
 
 The <tt>maven-dependency-versions-check-plugin</tt> is a Maven plugin that verifies that the resolved versions of dependencies are mutually compatible
 with each other. While Maven does a good job in dependency resolution, it usually applied the "higher version wins" algorithm to select a dependency and
-is not aware of any semantic notions of version number (e.g. that artifacts with different major version numbers are not comaptible. 
+is not aware of any semantic notions of version number (e.g. that artifacts with different major version numbers are not compatible.
 
 More specifically, it will check that
 
@@ -72,7 +72,7 @@ This is the dependency list for the plugin itself. Every line contains of the fo
 
 * actual dependency - The dependency that was resolved based on the project POM.
 * resolved dependency - The dependency that was chosen to be included.
-* additional versions - In braces, one or more dependency versions. These are the versions that were under consideration when choosing the final dependency. 
+* additional versions - In braces, one or more dependency versions. These are the versions that were under consideration when choosing the final dependency.
 
 If a dependency is surrounded by "*", it was declared in the project POM.
 If a dependency is surrounded by "!", then it is in conflict. Running the check plugin will flag this as error and might fail the build.
@@ -123,13 +123,13 @@ The above will change to <tt>[ERROR]</tt> if the plugin is configured to fail th
 
 = POM configuration section
 
-Note also that any configuration in a POM overrides the default configuration (e.g. from the parent POM), so you should duplicate that configuration or use the very 
+Note also that any configuration in a POM overrides the default configuration (e.g. from the parent POM), so you should duplicate that configuration or use the very
 arcane 'combine.children' trick (see http://www.sonatype.com/people/2007/06/how-to-merge-sub-items-from-parent-pom-to-child-pom-in-a-maven-plugin-configuration-2/ for details...).
 
 == exceptions
 
 In rare cases you need to configure the plugin to make exceptions, i.e. allow specific version conflicts. For instance, in the above example
-you might insist that <tt>log4j</tt> version 1.2.13 is fine:  
+you might insist that <tt>log4j</tt> version 1.2.13 is fine:
 
     <plugin>
       <groupId>com.ning.maven.plugins</groupId>
@@ -154,7 +154,7 @@ An exception must have all four elements (groupId, artifactId, expectedVersion a
 
 == warnIfMajorVersionIsHigher
 
-Boolean flag that enables warnings if a dependency that was excluded from version resolution depends on an incompatible version 
+Boolean flag that enables warnings if a dependency that was excluded from version resolution depends on an incompatible version
 (for historical reasons it is called 'warnIfMajorVersionIsHigher'). Default value is "false" (do not warn).
 
       <configuration>
@@ -164,7 +164,7 @@ Boolean flag that enables warnings if a dependency that was excluded from versio
 == failBuildInCaseOfConflict (check only)
 
 Boolean flag that will turn warnings about dependency problems into error messages and fail the build accordingly. Default value is "false" (only report warnings).
-    
+
       <configuration>
         <failBuildInCaseOfConflict>true</failBuildInCaseOfConflict>
       </configuration>
@@ -335,7 +335,7 @@ If A's POM looks like this:
     </project>
 
 Maven will resolve D's version to 1.0 because it will use the first version it encounters. This is obviously a problem since C needs at least version 1.1.
-If we change A's POM to 
+If we change A's POM to
 
     <project>
       <groupId>...</groupId>
