@@ -799,7 +799,7 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
             project.getArtifact(),
             Collections.EMPTY_MAP,
             localRepository,
-            remoteRepositories,
+            project.getRemoteArtifactRepositories(),
             artifactMetadataSource,
             new ArtifactOptionalFilter(includeOptional));
 
