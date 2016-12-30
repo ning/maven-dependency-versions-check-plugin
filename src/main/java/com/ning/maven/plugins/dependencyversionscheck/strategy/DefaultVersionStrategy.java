@@ -69,6 +69,13 @@ public class DefaultVersionStrategy implements Strategy
             }
         }
 
+        // Special case for -SNAPSHOT artifacts
+        if (versionBElements.length == versionAElements.length + 1 &&
+                versionBElements[versionBElements.length-1].getElement().equals("SNAPSHOT")) {
+            LOG.debug("... yes, is just a SNAPSHOT release");
+            return true;
+        }
+
         final boolean result = versionAElements.length >= versionBElements.length;
         LOG.debug("... {}!", result ? "yes" : "no");
         return result;
