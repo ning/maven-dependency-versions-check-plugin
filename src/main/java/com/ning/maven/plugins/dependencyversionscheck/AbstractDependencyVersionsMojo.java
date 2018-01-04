@@ -182,7 +182,7 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
      *   </configuration>
      * </pre>
      *
-     * @parameter default-value="false"
+     * @parameter default-value="false" property="dependencyversionscheck.skip"
      */
     protected boolean skip = false;
 
