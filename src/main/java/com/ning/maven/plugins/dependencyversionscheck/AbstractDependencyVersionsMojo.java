@@ -16,10 +16,23 @@
 
 package com.ning.maven.plugins.dependencyversionscheck;
 
+import com.google.common.base.Throwables;
+import com.google.common.util.concurrent.Futures;
+import com.google.common.util.concurrent.ListeningExecutorService;
+import com.google.common.util.concurrent.MoreExecutors;
+import com.google.common.util.concurrent.Striped;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import com.ning.maven.plugins.dependencyversionscheck.strategy.Strategy;
+import com.ning.maven.plugins.dependencyversionscheck.strategy.StrategyProvider;
+import com.ning.maven.plugins.dependencyversionscheck.util.ArtifactScopeFilter;
+import com.ning.maven.plugins.dependencyversionscheck.version.Version;
+import com.ning.maven.plugins.dependencyversionscheck.version.VersionResolution;
+import com.pyx4j.log4j.MavenLogAppender;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -30,20 +43,12 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.locks.Lock;
 import java.util.regex.Pattern;
-
-import org.apache.commons.collections.CollectionUtils;
-import org.apache.commons.lang.ArrayUtils;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.ArrayUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.maven.artifact.Artifact;
-import org.apache.maven.artifact.factory.ArtifactFactory;
-import org.apache.maven.artifact.metadata.ArtifactMetadataSource;
-import org.apache.maven.artifact.repository.ArtifactRepository;
 import org.apache.maven.artifact.resolver.AbstractArtifactResolutionException;
-import org.apache.maven.artifact.resolver.ArtifactCollector;
 import org.apache.maven.artifact.resolver.ArtifactNotFoundException;
 import org.apache.maven.artifact.resolver.ArtifactResolutionException;
-import org.apache.maven.artifact.resolver.ArtifactResolutionResult;
-import org.apache.maven.artifact.resolver.ArtifactResolver;
 import org.apache.maven.artifact.resolver.MultipleArtifactsNotFoundException;
 import org.apache.maven.artifact.resolver.filter.AndArtifactFilter;
 import org.apache.maven.artifact.resolver.filter.ArtifactFilter;
@@ -53,34 +58,25 @@ import org.apache.maven.artifact.versioning.DefaultArtifactVersion;
 import org.apache.maven.artifact.versioning.InvalidVersionSpecificationException;
 import org.apache.maven.artifact.versioning.OverConstrainedVersionException;
 import org.apache.maven.artifact.versioning.VersionRange;
+import org.apache.maven.execution.MavenSession;
 import org.apache.maven.model.Dependency;
 import org.apache.maven.model.Exclusion;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
+import org.apache.maven.plugins.annotations.Component;
+import org.apache.maven.plugins.annotations.Parameter;
+import org.apache.maven.project.DefaultProjectBuildingRequest;
 import org.apache.maven.project.MavenProject;
-import org.apache.maven.project.MavenProjectBuilder;
+import org.apache.maven.project.ProjectBuilder;
 import org.apache.maven.project.ProjectBuildingException;
+import org.apache.maven.project.ProjectBuildingRequest;
 import org.apache.maven.project.artifact.InvalidDependencyVersionException;
-import org.apache.maven.project.artifact.MavenMetadataSource;
-import org.apache.maven.shared.dependency.tree.DependencyNode;
-import org.apache.maven.shared.dependency.tree.DependencyTreeBuilder;
+import org.apache.maven.shared.dependency.graph.DependencyGraphBuilder;
+import org.apache.maven.shared.dependency.graph.DependencyNode;
+import org.apache.maven.shared.dependency.graph.traversal.CollectingDependencyNodeVisitor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import com.google.common.base.Throwables;
-import com.google.common.util.concurrent.Futures;
-import com.google.common.util.concurrent.ListeningExecutorService;
-import com.google.common.util.concurrent.MoreExecutors;
-import com.google.common.util.concurrent.Striped;
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import com.ning.maven.plugins.dependencyversionscheck.strategy.Strategy;
-import com.ning.maven.plugins.dependencyversionscheck.strategy.StrategyProvider;
-import com.ning.maven.plugins.dependencyversionscheck.util.ArtifactOptionalFilter;
-import com.ning.maven.plugins.dependencyversionscheck.util.ArtifactScopeFilter;
-import com.ning.maven.plugins.dependencyversionscheck.version.Version;
-import com.ning.maven.plugins.dependencyversionscheck.version.VersionResolution;
-import com.pyx4j.log4j.MavenLogAppender;
 
 /**
  * Base code for all the mojos. Contains the dependency resolvers and the common options.
@@ -91,87 +87,31 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
 
     /**
      * The maven project (effective pom).
-     *
-     * @parameter expression="${project}"
-     * @required
-     * @readonly
      */
-    protected MavenProject project;
+    @Parameter( defaultValue = "${project}", readonly = true, required = true)
+    private MavenProject project;
+
+    @Parameter( defaultValue = "${session}", readonly = true, required = true)
+    private MavenSession session;
+
+    @Component(hint="maven31")
+    private DependencyGraphBuilder dependencyGraphBuilder;
 
     /**
      * For creating MavenProject objects.
-     *
-     * @component
      */
-    protected MavenProjectBuilder mavenProjectBuilder;
-
-    /**
-     * The artifact factory.
-     *
-     * @component
-     */
-    protected ArtifactFactory artifactFactory;
-
-    /**
-     * Resolves artifacts.
-     *
-     * @component
-     */
-    protected ArtifactResolver artifactResolver;
+    @Component
+    private ProjectBuilder mavenProjectBuilder;
 
     /**
      * The strategy provider. This can be requested by other pieces to add
      * additional strategies.
-     *
-     * @component
      */
-    protected StrategyProvider strategyProvider;
+    @Component
+    private StrategyProvider strategyProvider;
 
-    /**
-     * For resolving versions.
-     *
-     * @component
-     */
-    protected ArtifactMetadataSource artifactMetadataSource;
-
-    /**
-     * The local repo for the project if defined;
-     *
-     * @parameter expression="${localRepository}"
-     * @required
-     * @readonly
-     */
-    protected ArtifactRepository localRepository;
-
-    /**
-     * @component
-     * @required
-     * @readonly
-     */
-    protected DependencyTreeBuilder treeBuilder;
-
-    /**
-     * @component
-     * @required
-     * @readonly
-     */
-    protected ArtifactCollector artifactCollector;
-
-    /**
-     * Remote repositories.
-     *
-     * @parameter expression="${project.remoteArtifactRepositories}"
-     * @required
-     * @readonly
-     */
-    protected List remoteRepositories;
-
-    /**
-     * A set of artifacts with expected and resolved versions that are to be except from the check.
-     *
-     * @parameter alias="exceptions"
-     */
-    protected VersionCheckExcludes[] exceptions;
+    @Parameter(alias = "exceptions")
+    private VersionCheckExcludes[] exceptions;
 
     /**
      * Skip the plugin execution.
@@ -181,26 +121,21 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
      *     <skip>true</skip>
      *   </configuration>
      * </pre>
-     *
-     * @parameter default-value="false"
      */
-    protected boolean skip = false;
+    @Parameter(defaultValue = "false")
+    private boolean skip;
 
     /**
      * Whether to warn if the resolved major version is higher then the expected one of the project or one of the dependencies.
-     *
-     * @parameter default-value="false"
      */
-    protected boolean warnIfMajorVersionIsHigher;
+    @Parameter(defaultValue = "false")
+    private boolean warnIfMajorVersionIsHigher;
 
     /**
      * Whether to run dependency resolution in parallel.
-     *
-     * @parameter expression="useParallelDependencyResolution"
-     *            default-value="true"
-     *
      */
-    protected boolean useParallelDependencyResolution;
+     @Parameter(defaultValue = "false")
+    private boolean useParallelDependencyResolution;
 
     /**
      * Resolvers to resolve versions and compare existing things.
@@ -218,17 +153,15 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
      *   </resolver>
      * </pre>
      *
-     * @parameter alias="resolvers"
      */
-    protected ResolverDefinition[] resolvers;
+    @Parameter(alias = "resolvers")
+    private ResolverDefinition[] resolvers;
 
     /**
      * Sets the default strategy.
-     *
-     * @parameter alias="defaultStrategy" default-value="default"
-     *
      */
-    protected String defaultStrategy = "default";
+    @Parameter(alias = "defaultStrategy", defaultValue = "default")
+    private String defaultStrategy = "default";
 
     /** Lists all available scopes for transitive dependency resolution. */
     protected static final Map TRANSITIVE_SCOPES;
@@ -263,7 +196,7 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
     protected final Map resolverPatternMap = new HashMap();
 
     /** Qualified artifact name to artifact. */
-    protected final Map resolvedDependenciesByName = new HashMap();
+    protected final Map<String, Artifact> resolvedDependenciesByName = new HashMap<>();
 
     protected Strategy defaultStrategyType;
 
@@ -286,13 +219,15 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
             else {
                 checkExceptions();
 
-                final DependencyNode node = treeBuilder.buildDependencyTree(project, localRepository, artifactFactory, artifactMetadataSource, null, artifactCollector);
+                ProjectBuildingRequest projectBuildingRequest = new DefaultProjectBuildingRequest(session.getProjectBuildingRequest());
 
-                for (final Iterator dependencyIt = node.iterator(); dependencyIt.hasNext(); ) {
-                    final DependencyNode dependency = (DependencyNode) dependencyIt.next();
-                    if (dependency.getState() == DependencyNode.INCLUDED) {
-                        final Artifact artifact = dependency.getArtifact();
-                        resolvedDependenciesByName.put(getQualifiedName(artifact), artifact);
+                projectBuildingRequest.setProject(project);
+
+                final DependencyNode rootNode = dependencyGraphBuilder.buildDependencyGraph(projectBuildingRequest, null);
+
+                for (final DependencyNode node : rootNode.getChildren()) {
+                    if (node.getOptional() == null || !node.getOptional()) {
+                        resolvedDependenciesByName.put(getQualifiedName(node.getArtifact()), node.getArtifact());
                     }
                 }
 
@@ -307,11 +242,8 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
                 doExecute();
             }
         }
-        catch (MojoExecutionException me) {
+        catch (MojoExecutionException | MojoFailureException  me) {
             throw me;
-        }
-        catch (MojoFailureException mfe) {
-            throw mfe;
         }
         catch (Exception e) {
             throw new MojoExecutionException("While running mojo: ", e);
@@ -594,7 +526,7 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
 
         try {
             // Build a version from the artifact that was resolved.
-            ArtifactVersion resolvedVersion = artifact.getSelectedVersion();
+            ArtifactVersion resolvedVersion = artifact.isSnapshot() ? new DefaultArtifactVersion(artifact.getBaseVersion()) : artifact.getSelectedVersion();
 
             if (resolvedVersion == null) {
                 resolvedVersion = new DefaultArtifactVersion(artifact.getVersion());
@@ -649,7 +581,7 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
     {
         ArtifactFilter exclusionFilter = null;
 
-        if (!CollectionUtils.isEmpty(dependency.getExclusions())) {
+        if (!dependency.getExclusions().isEmpty()) {
             final List exclusions = new ArrayList();
             for (Iterator j = dependency.getExclusions().iterator(); j.hasNext();) {
                 final Exclusion e = (Exclusion) j.next();
@@ -780,33 +712,6 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
     }
 
     /**
-     * Returns a Set of artifacts based off the given project. Artifacts can be filtered and optional dependencies can be excluded.
-     *
-     * It would be awesome if this method would also use the DependencyTreeBuilder which seems to yield better results (and is much closer to the actual compile tree in some cases)
-     * than the artifactResolver. However, due to MNG-3236 the artifact filter is not applied when resolving dependencies and this method relies on the artifact filter to get
-     * the scoping right. Well, maybe in maven 3.0 this will be better. Or different. Whatever comes first.
-     */
-    private Set resolveDependenciesInItsOwnScope(final MavenProject project, final ArtifactFilter filter, final boolean includeOptional)
-        throws InvalidDependencyVersionException, ArtifactResolutionException, ArtifactNotFoundException
-    {
-        Set dependencyArtifacts = MavenMetadataSource.createArtifacts(artifactFactory,
-            project.getDependencies(),
-            null,
-            filter,
-            null);
-
-        ArtifactResolutionResult result = artifactResolver.resolveTransitively(dependencyArtifacts,
-            project.getArtifact(),
-            Collections.EMPTY_MAP,
-            localRepository,
-            remoteRepositories,
-            artifactMetadataSource,
-            new ArtifactOptionalFilter(includeOptional));
-
-        return result.getArtifacts();
-    }
-
-    /**
      * Returns a Set of artifacts based off another artifact. The list of artifacts resolved can be filtered.
      *
      * It would be awesome if this method would also use the DependencyTreeBuilder which seems to yield better results (and is much closer to the actual compile tree in some cases)
@@ -814,14 +719,41 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
      * the scoping right. Well, maybe in maven 3.0 this will be better. Or different. Whatever comes first.
      */
     private Set resolveDependenciesInItsOwnScope(final Artifact artifact, final ArtifactFilter filter)
-        throws InvalidDependencyVersionException, ArtifactResolutionException, ArtifactNotFoundException, ProjectBuildingException
     {
-        MavenProject projectForArtifact = mavenProjectBuilder.buildFromRepository(artifact, remoteRepositories, localRepository);
+        ProjectBuildingRequest projectBuildingRequest = new DefaultProjectBuildingRequest(session.getProjectBuildingRequest());
+        MavenProject artifactProject;
+        try {
+            artifactProject = mavenProjectBuilder.build(artifact, projectBuildingRequest).getProject();
+        } catch (Exception e) {
+            LOG.warn("Failed to build maven project for artifact {}", artifact.toString());
+            LOG.debug("", e);
+            return Collections.EMPTY_SET;
+        }
 
-        // "false" == do not include any optional dependencies from here. As these dependencies are off an artifact that is already a dependency, this
-        // needs to ignore all optional deps. This avoids downloading poms that might not even exist and should not be part of the dependency
-        // resolution of the main project.
-        return resolveDependenciesInItsOwnScope(projectForArtifact, filter, false);
+        projectBuildingRequest.setProject(artifactProject);
+
+        final DependencyNode rootNode;
+        try {
+            rootNode = dependencyGraphBuilder.buildDependencyGraph(projectBuildingRequest, filter);
+        } catch (Exception e) {
+            LOG.warn("Failed to build Dependency Graph project for artifact {}", artifact.toString());
+            LOG.debug("", e);
+            return Collections.EMPTY_SET;
+        }
+
+        CollectingDependencyNodeVisitor visitor = new CollectingDependencyNodeVisitor();
+        rootNode.accept(visitor);
+
+        Set<Artifact> artifactSet = new HashSet<>();
+        List<DependencyNode> nodes = visitor.getNodes();
+        for (DependencyNode dependencyNode : nodes) {
+            if (dependencyNode.getOptional() == null || !dependencyNode.getOptional()) {
+                LOG.debug("Resolved Artifact: {}", dependencyNode.getArtifact().toString());
+                artifactSet.add(dependencyNode.getArtifact());
+            }
+        }
+
+        return artifactSet;
     }
 
     /**
@@ -829,17 +761,19 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
      */
     private Version getVersion(Artifact artifact) throws OverConstrainedVersionException
     {
-        Version version = null;
-
-        if (artifact != null) {
-            if ((artifact.getVersionRange() != null) && (artifact.getSelectedVersion() != null)) {
-                version = new Version(artifact.getVersionRange().toString(), artifact.getSelectedVersion().toString());
-            }
-            else {
-                version = new Version(artifact.getVersion());
-            }
+        if (artifact == null) {
+            return null;
         }
-        return version;
+
+        if (artifact.isSnapshot()) {
+            return new Version(artifact.getBaseVersion());
+        }
+
+        if ((artifact.getVersionRange() != null) && (artifact.getSelectedVersion() != null)) {
+            return new Version(artifact.getVersionRange().toString(), artifact.getSelectedVersion().toString());
+        }
+
+        return new Version(artifact.getVersion());
     }
 
     /**

@@ -16,47 +16,42 @@
 
 package com.ning.maven.plugins.dependencyversionscheck;
 
+import com.ning.maven.plugins.dependencyversionscheck.version.VersionResolution;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
-
-import org.apache.commons.collections.CollectionUtils;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.plugin.MojoExecutionException;
-
-import com.ning.maven.plugins.dependencyversionscheck.version.VersionResolution;
+import org.apache.maven.plugins.annotations.Mojo;
+import org.apache.maven.plugins.annotations.Parameter;
+import org.apache.maven.plugins.annotations.ResolutionScope;
 
 /**
  * Lists dependency versions in different scopes.
- *
- * @goal list
- * @requiresDependencyResolution test
  * @since 2.0.0
  */
+@Mojo( name = "list", requiresDependencyResolution = ResolutionScope.TEST)
 public class DependencyVersionsListMojo extends AbstractDependencyVersionsMojo
 {
     /**
      * The scope to list. Defaults to "compile". Valid values are "compile", "test" and "runtime".
-     *
-     * @parameter expression="${scope}" default-value="compile"
      */
-    protected String scope = "compile";
+    @Parameter(defaultValue = "compile")
+    private String scope;
 
     /**
      * Whether to list only direct dependencies or all dependencies. Default is to list all dependencies.
-     *
-     * @parameter expression="${directOnly}" default-value="false"
      */
-    protected boolean directOnly = false;
+    @Parameter(defaultValue = "false")
+    private boolean directOnly;
 
     /**
      * Whether to list all dependencies or only dependencies in conflict. Default is to list all dependencies.
-     *
-     * @parameter expression="${conflictsOnly}" default-value="false"
      */
-    protected boolean conflictsOnly = false;
+    @Parameter (defaultValue = "false")
+    protected boolean conflictsOnly;
 
     protected void doExecute() throws Exception
     {
@@ -71,7 +66,7 @@ public class DependencyVersionsListMojo extends AbstractDependencyVersionsMojo
             final String artifactName = (String) entry.getKey();
             final List resolutions = (List) entry.getValue();
 
-            if (CollectionUtils.isEmpty(resolutions)) {
+            if (resolutions.isEmpty()) {
                 LOG.warn("No resolutions for '{}', this should never happen!", artifactName);
                 continue; // for
             }

@@ -16,10 +16,9 @@
 
 package com.ning.maven.plugins.dependencyversionscheck;
 
-import org.apache.commons.lang.StringUtils;
-import org.apache.maven.artifact.Artifact;
-
 import com.ning.maven.plugins.dependencyversionscheck.version.Version;
+import org.apache.commons.lang3.StringUtils;
+import org.apache.maven.artifact.Artifact;
 
 public class VersionCheckExcludes
 {

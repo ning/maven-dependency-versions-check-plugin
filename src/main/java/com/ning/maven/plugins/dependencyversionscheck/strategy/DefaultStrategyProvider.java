@@ -21,8 +21,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-
-import org.apache.commons.collections.CollectionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,7 +44,7 @@ public class DefaultStrategyProvider implements StrategyProvider
     {
         if (resolvers == null) {
             Map newResolvers = new HashMap();
-            if (!CollectionUtils.isEmpty(resolverDefinitions)) {
+            if (!resolverDefinitions.isEmpty()) {
                 for (Iterator it = resolverDefinitions.iterator(); it.hasNext();) {
                     final Strategy resolver = (Strategy) it.next();
                     final String name = resolver.getName().toLowerCase(Locale.ENGLISH);

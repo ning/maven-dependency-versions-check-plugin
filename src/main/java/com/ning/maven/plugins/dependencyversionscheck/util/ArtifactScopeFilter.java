@@ -16,10 +16,9 @@
 
 package com.ning.maven.plugins.dependencyversionscheck.util;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.artifact.resolver.filter.ArtifactFilter;
-
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
 /**
  * Filter a given artifact based on a list of scopes. Only allow
@@ -38,7 +37,7 @@ public class ArtifactScopeFilter implements ArtifactFilter
     public boolean include(Artifact artifact)
     {
         for (int i = 0; i < scopes.length; i++) {
-            if (artifact.getScope().equals(scopes[i])) {
+            if (artifact.getScope() != null && artifact.getScope().equals(scopes[i])) {
                 return true;
             }
         }

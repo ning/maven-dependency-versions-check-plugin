@@ -16,12 +16,11 @@
 
 package com.ning.maven.plugins.dependencyversionscheck.strategy;
 
-import org.apache.commons.lang.StringUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.ning.maven.plugins.dependencyversionscheck.version.Version;
 import com.ning.maven.plugins.dependencyversionscheck.version.VersionElement;
+import org.apache.commons.lang3.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Implements Apache versioning strategy for two or three digits. It expects versions formatted as x.y, x.y.z. Versions

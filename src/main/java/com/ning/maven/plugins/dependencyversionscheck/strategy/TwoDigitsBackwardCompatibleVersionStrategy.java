@@ -16,11 +16,10 @@
 
 package com.ning.maven.plugins.dependencyversionscheck.strategy;
 
-import org.apache.commons.lang.StringUtils;
+import com.ning.maven.plugins.dependencyversionscheck.version.Version;
+import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import com.ning.maven.plugins.dependencyversionscheck.version.Version;
 
 /**
  * Relaxed variant of APR, very suitable for Java code. It is assumed that for every non-backwards compatible change, the artifactId
