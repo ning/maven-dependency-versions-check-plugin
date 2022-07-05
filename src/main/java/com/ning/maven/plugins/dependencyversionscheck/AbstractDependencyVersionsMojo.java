@@ -26,6 +26,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.locks.Lock;
@@ -257,13 +258,13 @@ public abstract class AbstractDependencyVersionsMojo extends AbstractMojo
     protected final Logger LOG = LoggerFactory.getLogger(this.getClass());
 
     /** ArtifactName to VersionStrategy. Filled in loadResolvers(). */
-    protected final Map resolverMap = new HashMap();
+    protected final Map resolverMap = new ConcurrentHashMap();
 
     /** Artifact pattern to VersionStrategy. Filled in loadResolvers(). */
-    protected final Map resolverPatternMap = new HashMap();
+    protected final Map resolverPatternMap = new ConcurrentHashMap();
 
     /** Qualified artifact name to artifact. */
-    protected final Map resolvedDependenciesByName = new HashMap();
+    protected final Map resolvedDependenciesByName = new ConcurrentHashMap();
 
     protected Strategy defaultStrategyType;
 
